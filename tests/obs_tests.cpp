@@ -1,5 +1,6 @@
 #include "dock.hpp"
 #include "preset_transfer.hpp"
+#include "configuration_backup.hpp"
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -112,6 +113,85 @@ static void transferTests(const std::filesystem::path &directory) {
             exported.items.back().name == L"External edit", "export roundtrip preserves full library and settings");
     std::cout << "PASS: preset import/export, collisions, Unicode/settings roundtrip, current disk state, source preservation and invalid/self-file rejection\n";
 }
+static void configurationTests(const std::filesystem::path &directory) {
+    std::filesystem::create_directories(directory);
+    ptz::PresetStore original(directory / L"external.ptz");
+    original.items = {{L"Küche", L"camera-a", {17, -4, 3}, {{"composition_x", .15, false}, {"exposure", -5, true}}}};
+    original.save();
+    tinyobs::SceneRules rules; rules.enabled = true;
+    rules.collections["Main collection"]["scene-uuid"] = {L"camera-a", L"Küche"};
+    rules.collections["Second collection"]["other-uuid"] = {L"camera-a", L"Küche"};
+    auto config = directory / L"dock.json";
+    tinyobs::writeConfigurationJson(config, tinyobs::dockConfiguration(original.path(), rules, false));
+    auto read = [](const std::filesystem::path &path) {
+        std::ifstream f(path, std::ios::binary); return std::string(std::istreambuf_iterator<char>(f), {});
+    };
+    auto originalBytes = read(original.path()), originalConfig = read(config);
+    auto path = directory / L"full.tinyptz.json";
+    tinyobs::exportConfiguration(original, config, rules, false, path);
+    auto loaded = tinyobs::readConfigurationBackup(path);
+    require(loaded.presets.size() == 1 && loaded.presets[0].name == L"Küche" &&
+            loaded.presets[0].position.tilt == -4 && loaded.presets[0].settings[0].value == .15 &&
+            loaded.presets[0].settings[1].automatic, "full backup includes exact PTZ/settings and Unicode");
+    require(loaded.rules.enabled && !loaded.saveCameraSettings &&
+            loaded.rules.lookup("Main collection", "scene-uuid")->name == L"Küche" &&
+            loaded.rules.lookup("Second collection", "other-uuid")->device == L"camera-a",
+            "backup includes automation, preferences and assignments in every collection");
+    // Remove the old absolute path from availability: the backup is self-contained.
+    auto destinationConfig = directory / L"new-machine" / L"dock.json";
+    auto movedOriginal = directory / L"external-original-kept.ptz";
+    std::filesystem::rename(original.path(), movedOriginal);
+    auto restored = tinyobs::restoreConfiguration(destinationConfig, loaded);
+    std::filesystem::rename(movedOriginal, original.path());
+    require(restored->path().parent_path() == destinationConfig.parent_path() &&
+            restored->path() != original.path(), "restore uses a new local managed preset library");
+    ptz::PresetStore disk(restored->path()); disk.load();
+    require(disk.items.size() == 1 && disk.items[0].position.tilt == -4, "restored presets persist on disk");
+    tinyobs::Host host{[] { return std::vector<tinyobs::Scene>{{"scene-uuid", "My scene"}}; },
+                      [] { return tinyobs::Scene{"scene-uuid", "My scene"}; },
+                      [] { return std::string("Main collection"); }};
+    {
+        tinyobs::Dock dock(destinationConfig, {}, host, false);
+        require(dock.findChild<QListWidget *>("presets")->count() == 1 &&
+                dock.findChild<QComboBox *>("scenePreset")->currentIndex() == 1 &&
+                dock.findChild<QCheckBox *>("sceneAutomation")->isChecked() &&
+                !dock.findChild<QCheckBox *>("includePresetSettings")->isChecked(),
+                "restored complete configuration survives dock recreation without a camera");
+    }
+    require(read(original.path()) == originalBytes && read(config) == originalConfig,
+            "backup and restore preserve original external library/configuration");
+    auto reject = [&](auto operation) {
+        bool rejected = false; try { operation(); } catch (const std::exception &) { rejected = true; }
+        require(rejected, "invalid backup operation rejected");
+        require(read(original.path()) == originalBytes && read(config) == originalConfig,
+                "invalid backup operation leaves original data intact");
+    };
+    reject([&] { tinyobs::exportConfiguration(original, config, rules, false, config); });
+    reject([&] { tinyobs::exportConfiguration(original, config, rules, false, original.path()); });
+    QFile good(QString::fromStdWString(path.wstring())); good.open(QIODevice::ReadOnly);
+    auto json = QJsonDocument::fromJson(good.readAll()).object(); good.close();
+    auto invalid = directory / L"invalid.tinyptz.json";
+    auto checkInvalid = [&](const QJsonObject &bad) {
+        tinyobs::writeConfigurationJson(invalid, bad);
+        reject([&] { tinyobs::readConfigurationBackup(invalid); });
+    };
+    auto bad = json; bad["version"] = 9; checkInvalid(bad);
+    bad = json; bad["presets"] = "TINY_PTZ_PRESETS 2\ninvalid\n"; checkInvalid(bad);
+    bad = json; auto cfg = bad["configuration"].toObject(); cfg["sceneAutomation"] = "true";
+    bad["configuration"] = cfg; checkInvalid(bad);
+    bad = json; cfg = bad["configuration"].toObject();
+    auto assignments = cfg["assignments"].toArray(); assignments.append(assignments[0]);
+    cfg["assignments"] = assignments; bad["configuration"] = cfg; checkInvalid(bad);
+    std::ofstream(invalid) << "{truncated";
+    reject([&] { tinyobs::readConfigurationBackup(invalid); });
+    // A failed config commit must not leave a half-restored preset file behind.
+    auto blocked = directory / L"blocked-config"; std::filesystem::create_directory(blocked);
+    auto count = [&] { return std::distance(std::filesystem::directory_iterator(directory), std::filesystem::directory_iterator{}); };
+    auto before = count();
+    reject([&] { tinyobs::restoreConfiguration(blocked, loaded); });
+    require(count() == before, "failed restore removes staged library and preserves prior configuration");
+    std::cout << "PASS: full backup/restore roundtrip, all collection assignments, automation/preferences, portable preset library, restart persistence, malformed/version/duplicate rejection and failed-commit cleanup\n";
+}
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setStyle("Fusion");
@@ -120,6 +200,7 @@ int main(int argc, char **argv) {
         QTemporaryDir temp;
         require(temp.isValid(), "temporary config directory");
         transferTests(std::filesystem::path(temp.path().toStdWString()) / L"transfer");
+        configurationTests(std::filesystem::path(temp.path().toStdWString()) / L"configuration");
         auto config = std::filesystem::path(temp.path().toStdWString()) / L"dock.json";
         auto library = config.parent_path() / L"saved.ptz";
         ptz::PresetStore presets(library);
@@ -134,6 +215,8 @@ int main(int argc, char **argv) {
             require(list && list->count() == 1, "saved portable presets load in dock");
             require(dock.findChild<QPushButton *>("importPresets") && dock.findChild<QPushButton *>("exportPresets"),
                     "preset import and export buttons available in dock");
+            require(dock.findChild<QPushButton *>("importConfiguration") && dock.findChild<QPushButton *>("exportConfiguration"),
+                    "complete configuration backup and restore buttons available in dock");
             auto automation = dock.findChild<QCheckBox *>("sceneAutomation");
             require(!automation->isChecked(), "scene movement opt in");
             auto target = dock.findChild<QComboBox *>("scenePreset");

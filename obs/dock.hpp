@@ -82,6 +82,7 @@ class Dock : public QWidget {
     void refreshPresets();
     void openPresets();
     void transferPresets(bool importing);
+    void transferConfiguration(bool importing);
     void capturePreset(bool replace);
     void recall(const ptz::Preset &preset, bool scene = false);
     void saveConfig();

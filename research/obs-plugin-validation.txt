@@ -1,3 +1,10 @@
+Tiny PTZ OBS plugin v0.4.2 full-configuration backup validation — 2026-11-12
+PASS: self-contained preset/settings and scene-assignment roundtrip for all collections; automation and capture preferences preserved.
+PASS: restored configuration loads in a new dock; original external preset/config files preserved; restored library uses local paths.
+PASS: malformed JSON, unsupported versions, invalid presets/typed flags and duplicate scene bindings rejected; failed config commit cleans staged presets.
+PASS: existing preset-transfer, worker, dock, scene and actual libobs module-loader regression tests.
+Camera/protocol code is unchanged; earlier hardware evidence below is from v0.4.0.
+
 Tiny PTZ OBS plugin v0.4.1 preset-transfer validation — 2026-11-12
 PASS: preset import/export, duplicate name suffixes, Unicode, negative PTZ, fractional settings, auto flags, current-disk export, source preservation, invalid and self-file rejection.
 PASS: import/export buttons present; existing worker, dock, scene and module-loader regression tests.

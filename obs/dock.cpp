@@ -1,5 +1,6 @@
 #include "dock.hpp"
 #include "preset_transfer.hpp"
+#include "configuration_backup.hpp"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
@@ -96,6 +97,7 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     includeSettings_ = new QCheckBox("Save camera settings with presets", ptzPage);
     includeSettings_->setToolTip("Include tracking, image and device settings when capturing a preset.");
     includeSettings_->setChecked(true);
+    includeSettings_->setObjectName("includePresetSettings");
     ptzLayout->addWidget(includeSettings_);
     auto presetButtons = new QGridLayout;
     auto recallButton = new QPushButton("Load preset", ptzPage);
@@ -198,6 +200,16 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     sceneLayout->addWidget(sceneStatus_);
     sceneLayout->addStretch();
     tabs->addTab(scenePage, "Scenes");
+    auto backupButtons = new QGridLayout;
+    auto backup = new QPushButton("Back up plugin...", this);
+    backup->setObjectName("exportConfiguration");
+    backup->setToolTip("Export presets, scene assignments, automation and preset preferences together in one file.");
+    auto restore = new QPushButton("Restore plugin...", this);
+    restore->setObjectName("importConfiguration");
+    restore->setToolTip("Restore the complete plugin configuration and presets from a backup.");
+    backupButtons->addWidget(backup, 0, 0);
+    backupButtons->addWidget(restore, 0, 1);
+    outer->addLayout(backupButtons);
     status_ = new QLabel("Ready", this);
     status_->setObjectName("cameraStatus");
     status_->setWordWrap(true);
@@ -243,6 +255,9 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     QObject::connect(capture, &QPushButton::clicked, this, [this] { capturePreset(false); });
     QObject::connect(replace, &QPushButton::clicked, this, [this] { capturePreset(true); });
     QObject::connect(open, &QPushButton::clicked, this, [this] { openPresets(); });
+    QObject::connect(backup, &QPushButton::clicked, this, [this] { transferConfiguration(false); });
+    QObject::connect(restore, &QPushButton::clicked, this, [this] { transferConfiguration(true); });
+    QObject::connect(includeSettings_, &QCheckBox::toggled, this, [this] { if (store_) saveConfig(); });
     QObject::connect(importButton, &QPushButton::clicked, this, [this] { transferPresets(true); });
     QObject::connect(exportButton, &QPushButton::clicked, this, [this] { transferPresets(false); });
     QObject::connect(reload, &QPushButton::clicked, this, [this] {
@@ -589,6 +604,40 @@ void Dock::transferPresets(bool importing) {
         }
     } catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
 }
+void Dock::transferConfiguration(bool importing) {
+    if (!store_) return;
+    QFileDialog dialog(this, importing ? "Restore Tiny PTZ configuration" : "Back up Tiny PTZ configuration");
+    dialog.setNameFilter("Tiny PTZ full backup (*.tinyptz.json)");
+    dialog.setDefaultSuffix("tinyptz.json");
+    dialog.setAcceptMode(importing ? QFileDialog::AcceptOpen : QFileDialog::AcceptSave);
+    dialog.setFileMode(importing ? QFileDialog::ExistingFile : QFileDialog::AnyFile);
+    dialog.setDirectory(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+    if (!importing) dialog.selectFile("tiny-ptz-backup.tinyptz.json");
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
+    try {
+        auto path = std::filesystem::path(dialog.selectedFiles().first().toStdWString());
+        if (!importing) {
+            exportConfiguration(*store_, config_, rules_, includeSettings_->isChecked(), path);
+            status("Plugin configuration and presets backed up to " + fileName(path));
+            return;
+        }
+        auto restored = readConfigurationBackup(path);
+        size_t assignments = 0;
+        for (auto &collection : restored.rules.collections) assignments += collection.second.size();
+        auto question = QString("Restore %1 presets and %2 scene assignments?\n\nThis replaces the plugin's active configuration and automation preference. The current preset file is kept unchanged. No camera movement is triggered by restoring.")
+                            .arg(restored.presets.size()).arg(assignments);
+        if (QMessageBox::question(this, "Restore plugin configuration", question, QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes) return;
+        auto next = restoreConfiguration(config_, restored);
+        ++*sceneGeneration_; ++deviceRevision_;
+        edits_.clear(); liveTimer_.stop(); worker_->cancel("");
+        store_ = std::move(next); rules_ = std::move(restored.rules);
+        QSignalBlocker automationBlock(sceneEnabled_), preferenceBlock(includeSettings_);
+        sceneEnabled_->setChecked(rules_.enabled);
+        includeSettings_->setChecked(restored.saveCameraSettings);
+        refreshPresets(); refreshScenes();
+        status("Plugin configuration restored. Scene automation resumes on the next Program scene change.");
+    } catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
+}
 void Dock::capturePreset(bool replace) {
     auto camera = device();
     if (camera.empty()) { status("Select and connect a camera first.", true); return; }
@@ -644,6 +693,7 @@ void Dock::recall(const ptz::Preset &preset, bool scene) {
 
 void Dock::loadConfig(const std::filesystem::path &bundledPresets) {
     std::filesystem::path presetPath = config_.parent_path() / L"presets.ptz";
+    bool saveCameraSettings = true;
     try {
         std::filesystem::create_directories(config_.parent_path());
         QFile f(fileName(config_));
@@ -654,6 +704,7 @@ void Dock::loadConfig(const std::filesystem::path &bundledPresets) {
             if (error.error != QJsonParseError::NoError || !document.isObject()) throw std::runtime_error("Invalid dock configuration; original preserved.");
             auto json = document.object();
             rules_.enabled = json["sceneAutomation"].toBool();
+            saveCameraSettings = json["saveCameraSettingsWithPresets"].toBool(true);
             auto path = json["presetFile"].toString();
             if (!path.isEmpty()) presetPath = path.toStdWString();
             for (auto entry : json["assignments"].toArray()) {
@@ -672,24 +723,11 @@ void Dock::loadConfig(const std::filesystem::path &bundledPresets) {
         // Missing/corrupt external libraries are never silently replaced or written.
     }
     QSignalBlocker block(sceneEnabled_); sceneEnabled_->setChecked(rules_.enabled);
+    QSignalBlocker preferenceBlock(includeSettings_); includeSettings_->setChecked(saveCameraSettings);
 }
 void Dock::saveConfig() {
     try {
-        QJsonObject json;
-        json["version"] = 1;
-        json["presetFile"] = fileName(store_->path());
-        json["sceneAutomation"] = rules_.enabled;
-        QJsonArray assignments;
-        for (auto &collection : rules_.collections) for (auto &scene : collection.second) {
-            QJsonObject o;
-            o["collection"] = qs(collection.first); o["scene"] = qs(scene.first);
-            o["device"] = qs(scene.second.device); o["preset"] = qs(scene.second.name);
-            assignments.append(o);
-        }
-        json["assignments"] = assignments;
-        QSaveFile file(fileName(config_));
-        if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(json).toJson()) < 0 || !file.commit())
-            throw std::runtime_error("Cannot save dock configuration.");
+        writeConfigurationJson(config_, dockConfiguration(store_->path(), rules_, includeSettings_->isChecked()));
     } catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
 }
 void Dock::refreshScenes() {
