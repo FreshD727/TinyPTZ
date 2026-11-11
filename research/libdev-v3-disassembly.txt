@@ -1,0 +1,171 @@
+Microsoft (R) COFF/PE Dumper Version 14.51.36260.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file C:\Program Files\OBSBOT Center\bin\libdev.dll
+
+File Type: DLL
+
+  00000001800EE430: test        rdx,rdx
+  00000001800EE433: je          00000001800EE5FC
+  00000001800EE439: push        rsi
+  00000001800EE43A: sub         rsp,20h
+  00000001800EE43E: movzx       eax,byte ptr [rdx+1]
+  00000001800EE442: mov         rsi,rcx
+  00000001800EE445: and         al,0FDh
+  00000001800EE447: mov         byte ptr [rdx],0AAh
+  00000001800EE44A: or          al,1
+  00000001800EE44C: mov         r11,rdx
+  00000001800EE44F: mov         byte ptr [rdx+1],al
+  00000001800EE452: movzx       ecx,byte ptr [rcx+4]
+  00000001800EE456: shl         cl,2
+  00000001800EE459: xor         cl,al
+  00000001800EE45B: and         cl,1Ch
+  00000001800EE45E: xor         cl,al
+  00000001800EE460: mov         byte ptr [rdx+1],cl
+  00000001800EE463: test        r8b,r8b
+  00000001800EE466: je          00000001800EE46F
+  00000001800EE468: mov         eax,2
+  00000001800EE46D: jmp         00000001800EE476
+  00000001800EE46F: cmp         word ptr [rsi],0Ch
+  00000001800EE473: seta        al
+  00000001800EE476: shl         al,5
+  00000001800EE479: and         cl,1Fh
+  00000001800EE47C: or          cl,al
+  00000001800EE47E: and         cl,7Fh
+  00000001800EE481: mov         byte ptr [rdx+1],cl
+  00000001800EE484: movzx       eax,word ptr [rsi+8]
+  00000001800EE488: mov         word ptr [rdx+2],ax
+  00000001800EE48C: mov         dword ptr [rdx+4],0Ch
+  00000001800EE493: mov         eax,dword ptr [rsi+18h]
+  00000001800EE496: cmp         eax,1
+  00000001800EE499: jne         00000001800EE4EA
+  00000001800EE49B: mov         word ptr [rsi+0Ch],6
+  00000001800EE4A1: mov         word ptr [rdx+0Ch],602h
+  00000001800EE4A7: movzx       eax,byte ptr [00000001801EE8E0h]
+  00000001800EE4AE: mov         byte ptr [rdx+0Eh],al
+  00000001800EE4B1: movzx       eax,byte ptr [00000001801EE8E1h]
+  00000001800EE4B8: mov         byte ptr [rdx+0Fh],al
+  00000001800EE4BB: movzx       eax,byte ptr [00000001801EE8E2h]
+  00000001800EE4C2: mov         byte ptr [rdx+10h],al
+  00000001800EE4C5: movzx       eax,byte ptr [00000001801EE8E3h]
+  00000001800EE4CC: mov         byte ptr [rdx+11h],al
+  00000001800EE4CF: movzx       eax,byte ptr [00000001801EE8E4h]
+  00000001800EE4D6: mov         byte ptr [rdx+12h],al
+  00000001800EE4D9: movzx       eax,byte ptr [00000001801EE8E5h]
+  00000001800EE4E0: mov         byte ptr [rdx+13h],al
+  00000001800EE4E3: add         word ptr [rdx+4],8
+  00000001800EE4E8: jmp         00000001800EE504
+  00000001800EE4EA: test        eax,0FFFFFFFDh
+  00000001800EE4EF: je          00000001800EE4FE
+  00000001800EE4F1: cmp         eax,3
+  00000001800EE4F4: jne         00000001800EE504
+  00000001800EE4F6: mov         word ptr [rsi+0Ch],106h
+  00000001800EE4FC: jmp         00000001800EE504
+  00000001800EE4FE: mov         word ptr [rsi+0Ch],0Bh
+  00000001800EE504: movzx       ecx,byte ptr [rsi+0Ah]
+  00000001800EE508: mov         byte ptr [rsi+0Bh],0
+  00000001800EE50C: call        00000001800EF0F0
+  00000001800EE511: xor         al,byte ptr [r11+9]
+  00000001800EE515: and         al,3Fh
+  00000001800EE517: xor         al,byte ptr [r11+9]
+  00000001800EE51B: mov         byte ptr [r11+9],al
+  00000001800EE51F: and         al,3Fh
+  00000001800EE521: movzx       ecx,byte ptr [rsi+0Bh]
+  00000001800EE525: shl         cl,6
+  00000001800EE528: or          al,cl
+  00000001800EE52A: mov         byte ptr [r11+9],al
+  00000001800EE52E: movzx       ecx,byte ptr [rsi+0Ch]
+  00000001800EE532: call        00000001800EF0F0
+  00000001800EE537: xor         al,byte ptr [r11+8]
+  00000001800EE53B: and         al,3Fh
+  00000001800EE53D: xor         al,byte ptr [r11+8]
+  00000001800EE541: mov         byte ptr [r11+8],al
+  00000001800EE545: and         al,3Fh
+  00000001800EE547: movzx       ecx,byte ptr [rsi+0Dh]
+  00000001800EE54B: shl         cl,6
+  00000001800EE54E: or          cl,al
+  00000001800EE550: mov         byte ptr [r11+8],cl
+  00000001800EE554: movzx       ecx,byte ptr [rsi+10h]
+  00000001800EE558: call        00000001800EF3A0
+  00000001800EE55D: mov         r10d,eax
+  00000001800EE560: xor         r10w,word ptr [r11+0Ah]
+  00000001800EE565: and         r10w,3Fh
+  00000001800EE56A: xor         r10w,word ptr [r11+0Ah]
+  00000001800EE56F: mov         word ptr [r11+0Ah],r10w
+  00000001800EE574: movzx       edx,word ptr [rsi+0Eh]
+  00000001800EE578: movzx       ecx,byte ptr [rsi+10h]
+  00000001800EE57C: call        00000001800EF650
+  00000001800EE581: shl         ax,6
+  00000001800EE585: and         r10w,3Fh
+  00000001800EE58A: or          ax,r10w
+  00000001800EE58E: mov         word ptr [r11+0Ah],ax
+  00000001800EE593: movzx       ecx,word ptr [rsi]
+  00000001800EE596: cmp         ecx,0Ch
+  00000001800EE599: jbe         00000001800EE5E5
+  00000001800EE59B: mov         qword ptr [rsp+30h],rbx
+  00000001800EE5A0: lea         r8,[rcx-0Ch]
+  00000001800EE5A4: mov         qword ptr [rsp+38h],rdi
+  00000001800EE5A9: lea         rdx,[rsi+1Ch]
+  00000001800EE5AD: movzx       edi,word ptr [r11+4]
+  00000001800EE5B2: sub         edi,0Ch
+  00000001800EE5B5: mov         ebx,edi
+  00000001800EE5B7: add         rbx,r11
+  00000001800EE5BA: lea         rcx,[rbx+10h]
+  00000001800EE5BE: call        0000000180196D2C
+  00000001800EE5C3: movzx       eax,word ptr [rsi]
+  00000001800EE5C6: add         di,4
+  00000001800EE5CA: sub         ax,0Ch
+  00000001800EE5CE: mov         word ptr [rbx+0Ch],ax
+  00000001800EE5D2: add         word ptr [rsi],di
+  00000001800EE5D5: mov         rdi,qword ptr [rsp+38h]
+  00000001800EE5DA: mov         rbx,qword ptr [rsp+30h]
+  00000001800EE5DF: add         rsp,20h
+  00000001800EE5E3: pop         rsi
+  00000001800EE5E4: ret
+  00000001800EE5E5: cmp         dword ptr [rsi+18h],1
+  00000001800EE5E9: jne         00000001800EE5F7
+  00000001800EE5EB: sub         cx,0Ch
+  00000001800EE5EF: add         cx,word ptr [r11+4]
+  00000001800EE5F4: mov         word ptr [rsi],cx
+  00000001800EE5F7: add         rsp,20h
+  00000001800EE5FB: pop         rsi
+  00000001800EE5FC: ret
+  00000001800EE5FD: int         3
+  00000001800EE5FE: int         3
+  00000001800EE5FF: int         3
+  00000001800EE600: mov         rdx,rcx
+  00000001800EE603: jmp         00000001800F2140
+  00000001800EE608: int         3
+  00000001800EE609: int         3
+  00000001800EE60A: int         3
+  00000001800EE60B: int         3
+  00000001800EE60C: int         3
+  00000001800EE60D: int         3
+  00000001800EE60E: int         3
+  00000001800EE60F: int         3
+  00000001800EE610: mov         r8,qword ptr [00000001801EEA60h]
+  00000001800EE617: movzx       edx,cl
+  00000001800EE61A: mov         rcx,r8
+  00000001800EE61D: mov         rax,qword ptr [r8+8]
+  00000001800EE621: cmp         byte ptr [rax+19h],0
+  00000001800EE625: jne         00000001800EE63E
+  00000001800EE627: cmp         dword ptr [rax+1Ch],edx
+  00000001800EE62A: jge         00000001800EE632
+  00000001800EE62C: mov         rax,qword ptr [rax+10h]
+  00000001800EE630: jmp         00000001800EE638
+  00000001800EE632: mov         rcx,rax
+  00000001800EE635: mov         rax,qword ptr [rax]
+  00000001800EE638: cmp         byte ptr [rax+19h],0
+  00000001800EE63C: je          00000001800EE627
+  00000001800EE63E: cmp         byte ptr [rcx+19h],0
+  00000001800EE642: jne         00000001800EE649
+  00000001800EE644: cmp         edx,dword ptr [rcx+1Ch]
+  00000001800EE647: jge         00000001800EE64C
+  00000001800EE649: mov         rcx,r8
+  00000001800EE64C: cmp         rcx,r8
+  00000001800EE64F: je          00000001800EE655
+
+  Summary
+
+      1A1000 .text

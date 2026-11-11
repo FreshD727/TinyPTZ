@@ -1,0 +1,11 @@
+tools/rea/
+build/
+dist/
+*.user
+data/
+research/*raw*.json
+research/libdev-full-disassembly.txt
+research/rea-desktop.json
+research/rea-setup-*.json
+research/reference-tree.json
+research/frida-schema.json
