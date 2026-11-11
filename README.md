@@ -6,6 +6,12 @@ presets stored on the PC. Presets can include camera settings as well as PTZ.
 This independent app uses Windows camera interfaces directly; see the
 [settings coverage](docs/SETTINGS.md) for capabilities and remaining gaps.
 
+The [OBS Studio dock plugin](docs/OBS-PLUGIN.md) is available separately as
+`dist/TinyPTZ-OBS-v0.4.0-Windows-x64.zip` for OBS 31.x / Qt 6.6.3 on Windows x64.
+It provides live PTZ/settings controls, the same saved presets, and automatic
+preset recall when the active Program scene changes. Build it with
+`./build-obs.ps1 -Setup -Package`; the standalone app does not require OBS.
+
 ## Run
 
 Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ-v0.3.4` after building).
@@ -116,9 +122,10 @@ Keep OBS or another video stream open if you want the camera to remain active
 after the CLI exits. The CLI does not override the camera's no-stream policy.
 
 `src/core.hpp`, `camera.cpp`, `settings.cpp`, and `presets.cpp` are the reusable C++17 core with
-no GUI dependency. `obs/plugin.cpp` is an optional libobs module that registers
-one OBS hotkey per preset at module load. See [OBS port notes](docs/OBS-PLUGIN.md).
-The standalone CLI can already be invoked from OBS scripts or external hotkeys.
+no GUI dependency. `obs/` adds a native Qt dock and a dedicated camera worker for
+OBS, including live controls, settings, saved presets, and scene automation.
+See the [OBS plugin guide](docs/OBS-PLUGIN.md). The standalone CLI can also be
+invoked from OBS scripts or external hotkeys.
 
 ## Build and test
 

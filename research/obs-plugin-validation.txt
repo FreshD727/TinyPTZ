@@ -1,0 +1,19 @@
+Tiny PTZ OBS plugin v0.4.0 validation — 2026-11-12
+Windows x64; installed OBS 31.0.0-beta3; runtime/development Qt 6.6.3.
+Source build uses the shared CRT and official SHA-256-checked OBS/Qt files.
+
+PASS: COM worker ownership, live-job coalescing, stale recall cancellation, error recovery, scene UUID/collection isolation, rename/delete rules, preset import, configuration roundtrip, negative/fractional controls, unsupported settings and shutdown
+PASS: mapped Program recall, Preview isolation, unmapped scene and scene rename callbacks
+PASS: installed libobs module loader, DLL ABI, native dock registration, real scene UUIDs, scene/preview callbacks, missing-device error, and module unload before Qt window destruction
+PASS: real Tiny SE dock connection, PTZ/settings read and live brightness slider/readback
+PASS: mapped Program recall, Preview isolation, unmapped scene and scene rename callbacks
+Cleanup: waiting for the camera's power transition before retrying restoration.
+PASS: original camera position, settings and power state restored
+PASS: installed libobs module loader, DLL ABI, native dock registration, real scene UUIDs, scene/preview callbacks, missing-device error, and module unload before Qt window destruction
+
+The module-loader test uses installed libobs and an isolated frontend fixture.
+The real OBS user configuration and saved preset files were not modified by tests.
+The fixture DLL is not distributed. Native OBS GUI/streaming is a manual integration check.
+A bounded cleanup retry was needed for a firmware power transition; original state was restored.
+Windows-font snapshots of hidden dock widgets were inspected; no desktop UI automation was used.
+CMake Visual Studio 2026 build passed; CTest: 3/3 (core, native settings UI, OBS dock).

@@ -71,7 +71,8 @@ The desktop settings window is compiled but was not exercised by UI automation,
 per the request to work through application code. Hardware tests use the same
 backend through the CLI and verify configuration changes, restoration, and
 disk-backed preset recall. They do not assess visual tracking quality. The OBS
-module remains an unbuilt integration scaffold; see OBS-PLUGIN.md.
+dock plugin now exposes the same core controls and settings, with Program scene
+preset automation; see [the plugin guide](OBS-PLUGIN.md) for its build and tests.
 
 ## Image defaults (v0.3)
 

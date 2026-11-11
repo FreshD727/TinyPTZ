@@ -75,7 +75,8 @@ The desktop settings window is compiled but was not exercised by UI automation,
 per the request to work through application code. Hardware tests use the same
 backend through the CLI and verify configuration changes, restoration, and
 disk-backed preset recall. They do not assess visual tracking quality. The OBS
-module remains an unbuilt integration scaffold; see OBS-PLUGIN.md.
+module was still an unbuilt integration scaffold at this stage. The v0.4.0 work
+below replaces it with a built dock plugin; see OBS-PLUGIN.md.
 
 ## Image defaults (v0.3)
 
@@ -267,3 +268,42 @@ brightness, composition and timeout, and about 47 ms for zone-home read/modify/
 write. Native-control tests verify the leading live update, continuous-drag
 progress, newest-value coalescing, release flush, mouse-capture verification
 suppression, no writes from typing, and clearing failures without modal popups.
+
+## Native OBS dock (v0.4.0, 2026-11-12)
+
+Replaced the unbuilt hotkey scaffold with a Qt dock using the shared camera core.
+The local OBS runtime is 31.0.0-beta3 with Qt 6.6.3. `build-obs.ps1` pins official
+OBS 31.0.0-beta3 source headers and the 2024-09-12 Qt development archive with
+SHA-256 checks; dependencies stay under ignored `build/obs-sdk`. Public runtime
+exports provide import libraries. The plugin and its copy of the core use `/MD`,
+while the standalone app retains its static CRT and existing portable package.
+
+All camera interfaces live on one dedicated COM STA thread, including teardown.
+Named pending jobs coalesce slider and scene bursts. Qt callbacks carry values,
+not COM objects. Live sliders throttle writes and verify final settings without
+blocking the OBS UI. The plugin opens no video preview graph. Native controls
+expose PTZ, all shared-core settings/defaults, unlimited preset editing/capture,
+and boot position storage. Default presets are copied from the packaged library
+only on first use; an external portable library can be opened directly.
+
+Scene rules use collection names and source UUIDs. Program scene callbacks apply
+saved PTZ/settings, Preview events do nothing, unmapped scenes cancel pending
+recalls, and automation starts disabled. Startup waits for FINISHED_LOADING.
+In-flight camera operations finish before the newest queued recall. Rename and
+delete operations in the dock maintain preset references in scene assignments.
+EXIT stops the worker and removes the dock while frontend APIs remain valid;
+QPointer guards module teardown if the host has already destroyed its widgets.
+
+Both direct MSVC and CMake builds passed. CTest passed core, native settings UI
+and dock tests (3/3). An isolated frontend fixture loaded the actual plugin DLL
+through installed libobs, testing native dock registration, actual OBS scenes,
+scene/preview callbacks, UUID rename persistence, disconnected-camera reporting,
+and unloading the module before destroying its Qt host window. Test fixtures
+are never packaged. The real Tiny SE passed dock connection, settings/PTZ reads,
+live brightness application/readback and scene-driven recall. Original state was
+restored; one bounded cleanup retry allowed a power transition to settle.
+Windows-font renders of the plugin's own hidden widgets were visually reviewed.
+No desktop UI automation or changes to the user's OBS configuration were used.
+
+`obs-plugin-validation.txt` records the results. Live OBS streaming/layout and
+visual tracking quality remain manual integration checks after installation.
