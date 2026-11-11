@@ -1,17 +1,18 @@
 # Tiny PTZ Portable
 
 Windows x64 camera controller focused on the OBSBOT Tiny SE: pan, tilt, zoom,
-optional live preview, and any number of named presets stored on the PC.
-This is an independent focused replacement for PTZ control, not a full clone of
-OBSBOT Center's recording, tracking, effects, firmware or account features.
+optional live preview, tracking/image/device settings, and any number of named
+presets stored on the PC. Presets can include camera settings as well as PTZ.
+This independent app uses Windows camera interfaces directly; see the
+[settings coverage](docs/SETTINGS.md) for capabilities and remaining gaps.
 
 ## Run
 
-Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ` after building).
+Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ-v0.2` after building).
 No installation, administrator access, Node,
 Python, .NET runtime or OBSBOT Center is needed to run the built app.
 The C++ runtime is statically linked; Windows supplies DirectShow.
-Move the entire TinyPTZ folder to any writable location (including USB storage).
+Move the entire TinyPTZ-v0.2 folder to any writable location (including USB storage).
 Presets are created in `data/presets.ptz` beside the executable.
 Do not run multiple writers (GUI, CLI or two copies) against the same data file.
 
@@ -19,11 +20,16 @@ Do not run multiple writers (GUI, CLI or two copies) against the same data file.
 2. Start preview if desired. Leave preview off when OBS is using the camera.
 3. Use the direction buttons (5 driver degrees per click), zoom buttons, or
    enter whole-number driver units and choose **Apply position**.
-4. Wait for movement to finish, click **Read position**, enter a name, and
+4. Open **Settings...** to edit Tracking, Image, or Device controls. Select a
+   row, choose a value (or Automatic where available), and Apply. The current
+   value is read back from the camera. Set-only requests are labeled explicitly.
+5. Leave **Include tracking, image and device settings when saving presets**
+   checked to capture settings, or uncheck it for PTZ-only presets.
+6. Wait for movement to finish, click **Read position**, enter a name, and
    choose **Save current**.
-5. Select a preset and choose **Recall selected**, or double-click its row.
+7. Select a preset and choose **Recall selected**, or double-click its row.
 
-Use **Update selected** to replace a preset's position, **Rename**, **Delete**,
+Use **Update selected** to replace a preset's position and settings, **Rename**, **Delete**,
 search, and **Import/Export** to manage the library. Import merges all camera
 records and adds suffixes for duplicate names. Presets retain their camera
 identity. Reconnecting on a different USB port or PC may change that identity;
@@ -39,10 +45,16 @@ needed for cleanup.
 
 The camera reports its own limits; unsupported controls or failed writes produce
 errors. Position readback is what the Windows driver returns and may reflect a
-commanded setpoint rather than measured gimbal motion. AI tracking can interfere
-with manual positioning; disable tracking in OBSBOT
-Center if needed. AI configuration is not implemented. Physical movement and
-preview need camera permission in Windows.
+commanded setpoint rather than measured gimbal motion. Recall pauses saved AI
+tracking for the PTZ move, restores saved configuration, then activates the saved
+tracking mode. Active tracking can move the camera afterward. Choose Tracking
+mode Off for a fixed framing. Physical movement and preview need camera
+permission in Windows.
+
+Existing v1 PTZ-only files remain readable. Their first save writes v2 and keeps
+a `.v1.backup`. The build copies an existing preset file into the new release
+folder only if that folder has none. Older executables cannot read v2; keep
+using the new GUI and CLI together. Original on-camera preset slots are untouched.
 
 ## Command line / OBS integration
 
@@ -51,6 +63,10 @@ ptzctl devices
 ptzctl read
 ptzctl wake
 ptzctl sleep
+ptzctl settings
+ptzctl set brightness 50
+ptzctl set white_balance 5000 --auto
+ptzctl set ai_mode 2
 ptzctl save "Desk"
 ptzctl recall "Desk"
 ptzctl recall "Desk" --device "EXACT DEVICE ID"
@@ -61,10 +77,13 @@ when there is exactly one. Reads do not start video capture. Both executables
 use the same portable data location. `hardware-test` makes small PTZ changes,
 saves and recalls four test presets, and restores its starting position and
 power state. It uses a separate test file and leaves user presets untouched.
+`settings-test` temporarily changes supported settings, checks readback, exercises
+a full disk-backed settings preset, and restores the starting values. It does
+not use the user preset library. Run tests only when camera activity is acceptable.
 The CLI releases its sleep guard on exit; keep OBS or another video stream open
 if you want the camera to remain active after the CLI exits.
 
-`src/core.hpp`, `camera.cpp`, and `presets.cpp` are the reusable C++17 core with
+`src/core.hpp`, `camera.cpp`, `settings.cpp`, and `presets.cpp` are the reusable C++17 core with
 no GUI dependency. `obs/plugin.cpp` is an optional libobs module that registers
 one OBS hotkey per preset at module load. See [OBS port notes](docs/OBS-PLUGIN.md).
 The standalone CLI can already be invoked from OBS scripts or external hotkeys.
@@ -78,7 +97,7 @@ Requires Windows, Visual Studio C++ Build Tools and Windows SDK. Run:
 ```
 
 This builds the native portable executables, runs the core tests, and creates
-`dist/TinyPTZ-Windows-x64.zip`. CMake is also supported. No third-party binary
+`dist/TinyPTZ-v0.2-Windows-x64.zip`. CMake is also supported. No third-party binary
 from OBSBOT is bundled or loaded by the app. The development encoder probe
 loads the installed DLL only to generate reference packets.
 

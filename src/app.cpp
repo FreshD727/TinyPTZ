@@ -4,6 +4,9 @@
 #include <commdlg.h>
 #include <functional>
 #include <shellapi.h>
+namespace ptz {
+void showSettings(HWND, Camera &);
+}
 using namespace ptz;
 namespace {
 enum {
@@ -34,7 +37,9 @@ enum {
     Pan,
     Tilt,
     Zoom,
-    List
+    List,
+    SettingsButton,
+    IncludeSettings
 };
 HINSTANCE instance;
 HWND mainWindow, deviceBox, status, previewHost, list, searchBox, nameBox, panBox, tiltBox, zoomBox;
@@ -114,7 +119,8 @@ void fillList() {
         item.pszText = const_cast<wchar_t *>(p.name.c_str());
         int row = ListView_InsertItem(list, &item);
         auto values = std::to_wstring(p.position.pan) + L" / " + std::to_wstring(p.position.tilt) +
-                      L" / " + std::to_wstring(p.position.zoom);
+                      L" / " + std::to_wstring(p.position.zoom) + L"  + " +
+                      std::to_wstring(p.settings.size()) + L" settings";
         ListView_SetItemText(list, row, 1, values.data());
     }
 }
@@ -220,6 +226,10 @@ void fileTransfer(bool importing) {
     }
 }
 void command(int id) {
+    if (id == SettingsButton) {
+        showSettings(mainWindow, camera);
+        return;
+    }
     if (id == Refresh) {
         refresh();
         return;
@@ -307,8 +317,15 @@ void command(int id) {
         auto name = presetName();
         uniqueName(name);
         auto p = camera.read();
-        persist([&] { store.items.push_back({name, camera.id(), p}); });
-        message(L"Saved \"" + name + L"\" beside the portable app.");
+        persist([&] {
+            store.items.push_back({name, camera.id(), p,
+                                   SendMessageW(GetDlgItem(mainWindow, IncludeSettings),
+                                                BM_GETCHECK, 0, 0) == BST_CHECKED
+                                       ? camera.snapshotSettings()
+                                       : std::vector<SettingValue>{}});
+        });
+        message(L"Saved \"" + name + L"\" with " +
+                std::to_wstring(store.items.back().settings.size()) + L" camera settings.");
         return;
     }
     int index = selection();
@@ -318,7 +335,7 @@ void command(int id) {
     if (id == Recall) {
         if (camera.id() != p.device)
             throw std::runtime_error("Connect the camera associated with this preset.");
-        camera.move(p.position);
+        camera.recall(p);
         message(L"Recalled \"" + p.name + L"\".");
     } else if (id == Update) {
         if (camera.id() != p.device)
@@ -326,8 +343,14 @@ void command(int id) {
         if (camera.sleeping())
             throw std::runtime_error("Wake and position the camera before updating a preset.");
         auto position = camera.read();
-        persist([&] { store.items[index].position = position; });
-        message(L"Updated selected preset from current camera position.");
+        persist([&] {
+            store.items[index].position = position;
+            store.items[index].settings = SendMessageW(GetDlgItem(mainWindow, IncludeSettings),
+                                                       BM_GETCHECK, 0, 0) == BST_CHECKED
+                                              ? camera.snapshotSettings()
+                                              : std::vector<SettingValue>{};
+        });
+        message(L"Updated selected preset from current position and selected settings option.");
     } else if (id == Rename) {
         auto name = presetName();
         uniqueName(name, index);
@@ -360,6 +383,10 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
                               L"preview off when OBS uses the camera.",
                               0, 24, 158, 520, 290, SS_CENTER | SS_CENTERIMAGE | WS_CLIPCHILDREN);
             button(L"Start preview", Preview, 24, 461, 140);
+            button(L"Settings...", SettingsButton, 574, 481, 248);
+            ctl(L"BUTTON", L"Include tracking, image and device settings when saving presets",
+                IncludeSettings, 24, 497, 530, 24, BS_AUTOCHECKBOX | WS_TABSTOP);
+            SendMessageW(GetDlgItem(w, IncludeSettings), BM_SETCHECK, BST_CHECKED, 0);
             button(L"Read position", Read, 178, 461, 140);
             button(L"Wake", Wake, 332, 461, 100);
             button(L"Sleep", Sleep, 444, 461, 100);
@@ -427,7 +454,8 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
                 message(L"Camera changed. Click Connect.");
                 return 0;
             }
-            if (HIWORD(wp) == BN_CLICKED && id >= Refresh && id <= Sleep) {
+            if (HIWORD(wp) == BN_CLICKED &&
+                (id >= Refresh && id <= Sleep || id == SettingsButton)) {
                 command(id);
                 return 0;
             }

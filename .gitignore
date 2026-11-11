@@ -9,3 +9,6 @@ research/rea-desktop.json
 research/rea-setup-*.json
 research/reference-tree.json
 research/frida-schema.json
+research/sdk-reference-tree.json
+research/sdk-dev-reference.hpp
+research/tiny-reference.ts

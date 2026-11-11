@@ -18,7 +18,7 @@ int main() {
         require(std::all_of(packet.begin() + 14, packet.end(), [](auto b) { return b == 0; }),
                 "packet padding must be zero");
         auto sleep = wakePacket(false, 0x1234);
-        require(sleep[4] == 0x12 && sleep[5] == 0x34 && sleep[13] == 0,
+        require(sleep[4] == 0x12 && sleep[5] == 0x34 && sleep[13] == 3,
                 "sleep and sequence encoding");
         auto path = std::filesystem::current_path() / L"build" /
                     (L"tiny-ptz-test-" + std::to_wstring(GetCurrentProcessId()) + L".ptz");
@@ -27,10 +27,34 @@ int main() {
             s.items.push_back({L"Scene \"" + std::to_wstring(i) + L"\" – Küche",
                                L"camera-id",
                                {i % 100, -10, 3}});
+        s.items[0].settings = {{"brightness", 42, false},
+                               {"white_balance", 5040, true},
+                               {"composition_x", .125, false}};
         s.save();
         PresetStore other(path);
         other.load();
         require(other.items.size() == 1000, "arbitrary preset count");
+        require(other.items[0].settings.size() == 3 && other.items[0].settings[1].automatic &&
+                    other.items[0].settings[2].value == .125,
+                "preset settings and automatic modes roundtrip");
+        auto oldPath = path;
+        oldPath += L".v1";
+        {
+            std::ofstream f(oldPath);
+            f << "TINY_PTZ_PRESETS 1\n\"Legacy desk\" \"camera-id\" 12 0 1\n";
+        }
+        PresetStore old(oldPath);
+        old.load();
+        require(old.items.size() == 1 && old.items[0].settings.empty(), "v1 compatibility");
+        old.save();
+        PresetStore upgraded(oldPath);
+        upgraded.load();
+        require(upgraded.items[0].name == L"Legacy desk", "v1 migration preserves data");
+        std::filesystem::remove(oldPath);
+        auto backup = oldPath;
+        backup += L".v1.backup";
+        require(std::filesystem::exists(backup), "v1 migration keeps backup");
+        std::filesystem::remove(backup);
         require(other.items[999].name == s.items[999].name, "Unicode and quoted names roundtrip");
         require(other.items[999].position.zoom == 3, "PTZ roundtrip");
         require(quantize(7, {-10, 10, 3, 0, true}) == 8, "step quantization");
@@ -67,7 +91,8 @@ int main() {
         auto tmp = path;
         tmp += L".tmp";
         std::filesystem::remove(tmp);
-        std::cout << "PASS: original-encoder packet fixture, 1000 presets, Unicode, PTZ values, "
+        std::cout << "PASS: original-encoder packet fixture, 1000 presets, v1 migration/backup, "
+                     "setting values/auto modes, Unicode, PTZ values, "
                      "quantization, corrupt-file rejection, atomic-save preservation\n";
         return 0;
     } catch (const std::exception &e) {

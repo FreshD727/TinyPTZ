@@ -77,8 +77,124 @@ void hardwareTest(Camera &c) {
         throw;
     }
 }
+void settingsTest(Camera &c) {
+    bool asleep = c.sleeping();
+    c.wake(true);
+    settle();
+    auto position = c.read();
+    auto initial = c.settings();
+    std::vector<SettingValue> restore;
+    int failures = 0;
+    auto lookup = [&](const std::string &key) {
+        auto i = std::find_if(initial.begin(), initial.end(),
+                              [&](auto &s) { return s.current.key == key; });
+        if (i == initial.end() || !i->readable || !i->writable)
+            throw std::runtime_error("Test setting unavailable: " + key);
+        return *i;
+    };
+    auto verify = [&](SettingValue v) {
+        auto all = c.settings();
+        auto i =
+            std::find_if(all.begin(), all.end(), [&](auto &s) { return s.current.key == v.key; });
+        if (i == all.end() || !i->readable || i->current.automatic != v.automatic ||
+            !v.automatic && std::abs(i->current.value - v.value) > .02)
+            throw std::runtime_error("Setting readback mismatch: " + v.key);
+        std::cout << "PASS " << v.key << "=" << v.value << " auto=" << v.automatic << "\n";
+    };
+    auto cleanup = [&] {
+        bool failed = false;
+        for (auto i = restore.rbegin(); i != restore.rend(); ++i)
+            try {
+                c.applySetting(*i);
+            } catch (const std::exception &e) {
+                failed = true;
+                std::cerr << "RESTORE ERROR " << i->key << ": " << e.what() << "\n";
+            }
+        auto ai = lookup("ai_mode");
+        c.applySetting(ai.current);
+        c.move(position);
+        settle();
+        if (asleep)
+            c.wake(false);
+        if (failed)
+            throw std::runtime_error("Some original settings could not be restored");
+    };
+    try {
+        for (auto key : {"gimbal_reverse", "zone_enabled", "hand"}) {
+            auto s = lookup(key);
+            auto target = s.current;
+            restore.push_back(s.current);
+            if (target.automatic) {
+                target.automatic = false;
+                target.value = s.minimum + std::floor((target.value - s.minimum) / s.step) * s.step;
+            } else
+                target.value = target.value + s.step <= s.maximum ? target.value + s.step
+                                                                  : target.value - s.step;
+            try {
+                c.applySetting(target);
+                verify(target);
+            } catch (const std::exception &e) {
+                ++failures;
+                std::cout << "UNVERIFIED " << key << ": " << e.what() << "\n";
+            }
+            try {
+                c.applySetting(s.current);
+                verify(s.current);
+            } catch (const std::exception &e) {
+                ++failures;
+                std::cout << "RESTORE UNVERIFIED " << key << ": " << e.what() << "\n";
+            }
+        }
+        restore.push_back(lookup("brightness").current);
+        auto brightness = lookup("brightness").current;
+        brightness.value = brightness.value < 99 ? brightness.value + 1 : brightness.value - 1;
+        Preset p{L"Settings recall test", c.id(), position, c.snapshotSettings()};
+        for (auto &v : p.settings)
+            if (v.key == "brightness")
+                v = brightness;
+        std::cout << "Testing full preset snapshot: " << p.settings.size() << " settings\n";
+        auto path = portableData().parent_path() / L"settings-test.ptz";
+        if (std::filesystem::exists(path))
+            throw std::runtime_error("Test file already exists");
+        PresetStore disk(path);
+        disk.items = {p};
+        disk.save();
+        PresetStore loaded(path);
+        loaded.load();
+        c.recall(loaded.items.at(0));
+        for (auto &v : p.settings)
+            verify(v);
+        std::filesystem::remove(path);
+        restore.push_back(lookup("exposure").current);
+        restore.push_back(lookup("gain").current);
+        auto manualExposure = lookup("exposure").current;
+        manualExposure.automatic = false;
+        auto manualGain = lookup("gain").current;
+        manualGain.value = manualGain.value < 128 ? manualGain.value + 1 : manualGain.value - 1;
+        Preset manual{L"Manual exposure/gain recall",
+                      c.id(),
+                      position,
+                      {manualGain, manualExposure}}; // Deliberately gain first in the file.
+        c.recall(manual);
+        verify(manualExposure);
+        verify(manualGain);
+        cleanup();
+        if (failures)
+            throw std::runtime_error(std::to_string(failures) +
+                                     " setting checks need investigation");
+        std::cout << "PASS: settings read/write/restore and disk-backed settings preset recall\n";
+    } catch (...) {
+        try {
+            cleanup();
+        } catch (const std::exception &e) {
+            std::cerr << "Cleanup error: " << e.what() << "\n";
+        }
+        throw;
+    }
+}
 } // namespace
 int wmain(int argc, wchar_t **argv) {
+    std::cout << std::unitbuf;
     HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(init)) {
         std::cerr << "COM initialization failed\n";
@@ -92,15 +208,19 @@ int wmain(int argc, wchar_t **argv) {
                 << L"Tiny PTZ CLI\n  ptzctl devices\n  ptzctl read [--device ID]\n  ptzctl wake | "
                    L"sleep [--device ID]\n  ptzctl save NAME [--device ID]\n  ptzctl recall NAME "
                    L"[--device ID]\n  ptzctl diagnostics [--device ID]\n  ptzctl hardware-test "
-                   L"[--device ID] (moves PTZ, tests four presets, restores)\n";
+                   L"[--device ID] (moves PTZ, tests four presets, restores)\n  ptzctl settings\n  "
+                   L"ptzctl set KEY VALUE [--auto]\n  ptzctl settings-test (changes settings "
+                   L"temporarily, then restores)\n";
         } else if (cmd == L"devices") {
             for (auto &d : devices())
                 std::wcout << d.name << L"\n" << d.id << L"\n";
         } else {
             if (cmd != L"read" && cmd != L"wake" && cmd != L"sleep" && cmd != L"save" &&
-                cmd != L"recall" && cmd != L"diagnostics" && cmd != L"hardware-test")
+                cmd != L"recall" && cmd != L"diagnostics" && cmd != L"hardware-test" &&
+                cmd != L"settings" && cmd != L"set" && cmd != L"settings-test")
                 throw std::runtime_error("Unknown command; use --help");
             std::wstring id, name;
+            SettingValue setting;
             int option = 2;
             if (cmd == L"save" || cmd == L"recall") {
                 if (argc < 3)
@@ -108,9 +228,21 @@ int wmain(int argc, wchar_t **argv) {
                 name = argv[2];
                 option = 3;
             }
+            if (cmd == L"set") {
+                if (argc < 4)
+                    throw std::runtime_error("Use: set KEY VALUE [--auto] [--device ID]");
+                setting.key = utf8(argv[2]);
+                size_t end = 0;
+                setting.value = std::stod(argv[3], &end);
+                if (end != std::wstring(argv[3]).size())
+                    throw std::runtime_error("Invalid numeric setting");
+                option = 4;
+            }
             for (int i = option; i < argc; ++i) {
                 if (std::wstring(argv[i]) == L"--device" && i + 1 < argc)
                     id = argv[++i];
+                else if (cmd == L"set" && std::wstring(argv[i]) == L"--auto")
+                    setting.automatic = true;
                 else
                     throw std::runtime_error("Invalid option; use --help");
             }
@@ -126,12 +258,25 @@ int wmain(int argc, wchar_t **argv) {
                     "Tiny SE not found. Use devices, then --device with its exact ID.");
             Camera c;
             c.connect(id);
-            if (cmd == L"read")
+            if (cmd == L"settings") {
+                c.wake(true);
+                for (auto &s : c.settings())
+                    std::cout << s.current.key << "="
+                              << (s.readable ? std::to_string(s.current.value) : "unreadable")
+                              << " auto=" << s.current.automatic << " writable=" << s.writable
+                              << " range=" << s.minimum << ".." << s.maximum << " | "
+                              << utf8(s.details) << "\n";
+            } else if (cmd == L"set") {
+                c.applySetting(setting);
+                std::cout << "Setting command completed; read settings to verify\n";
+            } else if (cmd == L"read")
                 print(c.read());
             else if (cmd == L"diagnostics")
                 std::cout << c.diagnostics();
             else if (cmd == L"hardware-test")
                 hardwareTest(c);
+            else if (cmd == L"settings-test")
+                settingsTest(c);
             else if (cmd == L"wake" || cmd == L"sleep") {
                 c.wake(cmd == L"wake");
                 std::cout << "Power state verified\n";
@@ -143,15 +288,20 @@ int wmain(int argc, wchar_t **argv) {
                 if (cmd == L"recall") {
                     if (p == s.items.end())
                         throw std::runtime_error("Preset not found for this camera");
-                    c.move(p->position);
-                    expect(c, p->position, "Recall");
+                    c.recall(*p);
+                    if (std::none_of(p->settings.begin(), p->settings.end(), [](auto &v) {
+                            return (v.key == "ai_mode" || v.key == "zone_enabled") && v.value != 0;
+                        }))
+                        expect(c, p->position, "Recall");
+                    else
+                        std::cout << "Preset applied; active tracking may move the camera.\n";
                 } else {
                     if (p != s.items.end())
                         throw std::runtime_error("Preset name already exists");
                     if (c.sleeping())
                         throw std::runtime_error(
                             "Wake and position the camera before saving a preset.");
-                    s.items.push_back({name, id, c.read()});
+                    s.items.push_back({name, id, c.read(), c.snapshotSettings()});
                     s.save();
                     std::wcout << L"Saved " << name << L"\n";
                 }

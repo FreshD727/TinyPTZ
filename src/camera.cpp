@@ -88,6 +88,7 @@ void Camera::connect(const std::wstring &id) {
                 check(hr, "Camera has no standard PTZ interface");
             }
             id_ = id;
+            filter_.As(&procamp_);
             return;
         }
         m.Reset();
@@ -107,6 +108,8 @@ void Camera::disconnect() {
     }
     extension_.Reset();
     control_.Reset();
+    procamp_.Reset();
+    appliedSettings_.clear();
     filter_.Reset();
     id_.clear();
     if (failure)
@@ -179,7 +182,7 @@ bool Camera::sleeping() {
           "Read OBSBOT sleep status");
     if (bytes != 60)
         throw std::runtime_error("Incomplete OBSBOT status");
-    return status[2] != 0;
+    return status[9] != 1;
 }
 void Camera::holdAwake(bool hold) {
     discoverExtension();
@@ -208,7 +211,7 @@ void Camera::wake(bool awake) {
         return;
     }
     // Recovered from libdev.dll's legacy encoder and cameraSetDevRunStatusR.
-    // Tiny SE accepts this format; V3 writes time out on the tested firmware.
+    // Tiny SE requires legacy wake; V3 settings work after the device is awake.
     auto frame = wakePacket(awake, ++sequence_);
     KSP_NODE prop{};
     prop.Property.Set = obsbotXu;

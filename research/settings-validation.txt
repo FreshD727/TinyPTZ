@@ -1,0 +1,32 @@
+PASS brightness=51 auto=0
+PASS brightness=50 auto=0
+UNVERIFIED face_focus: Face-focus readback did not match the requested value
+PASS face_focus=1 auto=0
+PASS gesture_tracking=0 auto=0
+PASS gesture_tracking=1 auto=0
+PASS gesture_zoom=0 auto=0
+PASS gesture_zoom=1 auto=0
+PASS gesture_dynamic_zoom=0 auto=0
+PASS gesture_dynamic_zoom=1 auto=0
+PASS gesture_mirror=1 auto=0
+PASS gesture_mirror=0 auto=0
+PASS tracking_style=1 auto=0
+PASS tracking_style=2 auto=0
+PASS zone_pan_min=-99.9 auto=0
+PASS zone_pan_min=-100 auto=0
+PASS composition_x=0.01 auto=0
+PASS composition_x=0 auto=0
+UNVERIFIED anti_flicker: Camera readback did not confirm setting: anti_flicker
+PASS anti_flicker=1 auto=0
+PASS hdr=1 auto=0
+PASS hdr=0 auto=0
+PASS human_framing=1 auto=0
+PASS human_framing=0 auto=0
+PASS ai_mode=1 auto=0
+PASS ai_mode=0 auto=0
+PASS brightness=51 auto=0
+PASS white_balance=5000 auto=1
+PASS gesture_zoom=1 auto=0
+PASS composition_x=0 auto=0
+PASS ai_mode=0 auto=0
+2 setting checks need investigation

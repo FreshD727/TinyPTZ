@@ -8,7 +8,8 @@ link the same static `ptz_core` library. An OBS module can link it too, with no
 runtime process or proprietary SDK dependency. COM must be initialized on the
 thread opening the camera, and camera interfaces must stay on that thread.
 
-The included module registers preset recall hotkeys. To experiment:
+The included module registers preset recall hotkeys and uses the same core
+recall path for PTZ plus saved tracking, image and device settings. To experiment:
 
 1. Install the matching OBS development SDK and configure CMake with
    `-DBUILD_OBS_PLUGIN=ON` and `CMAKE_PREFIX_PATH` pointing at libobs.

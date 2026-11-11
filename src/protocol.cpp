@@ -11,7 +11,7 @@ std::array<unsigned char, 60> wakePacket(bool awake, std::uint16_t sequence) {
     frame[10] = 0x13;
     frame[11] = 0xc2;
     frame[12] = 1;
-    frame[13] = awake ? 1 : 0;
+    frame[13] = awake ? 1 : 3;
     // CRC-16/USB across the 14-byte legacy message; token stored big-endian.
     std::uint16_t crc = 0xffff;
     for (int i = 0; i < 14; ++i) {

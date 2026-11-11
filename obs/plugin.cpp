@@ -21,7 +21,7 @@ static void recall(void *data, obs_hotkey_id, obs_hotkey_t *, bool pressed) {
     try {
         ptz::Camera camera;
         camera.connect(b->preset.device);
-        camera.move(b->preset.position);
+        camera.recall(b->preset);
     } catch (const std::exception &e) {
         blog(LOG_WARNING, "[tiny-ptz] %s", e.what());
     }

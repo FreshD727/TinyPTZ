@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <ks.h>
 #include <ksproxy.h>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -21,9 +22,22 @@ struct Range {
     long min = 0, max = 0, step = 1, normal = 0;
     bool supported = false;
 };
+struct SettingValue {
+    std::string key;
+    double value = 0;
+    bool automatic = false;
+};
+struct Setting {
+    SettingValue current;
+    std::wstring name, group, details;
+    double minimum = 0, maximum = 1, step = 1;
+    bool readable = false, writable = false, autoSupported = false;
+    std::vector<std::pair<double, std::wstring>> choices;
+};
 struct Preset {
     std::wstring name, device;
     Position position;
+    std::vector<SettingValue> settings;
 };
 std::vector<Device> devices();
 std::string utf8(const std::wstring &);
@@ -32,6 +46,7 @@ std::filesystem::path portableData();
 class Camera {
     ComPtr<IBaseFilter> filter_;
     ComPtr<IAMCameraControl> control_;
+    ComPtr<IAMVideoProcAmp> procamp_;
     ComPtr<IGraphBuilder> graph_;
     ComPtr<IMediaControl> media_;
     ComPtr<IVideoWindow> video_;
@@ -39,9 +54,14 @@ class Camera {
     ULONG node_ = 0;
     unsigned short sequence_ = 0;
     bool sleepGuard_ = false;
+    std::map<std::string, SettingValue> appliedSettings_;
     std::wstring id_;
     void discoverExtension();
     void holdAwake(bool hold);
+    std::vector<unsigned char> extension(ULONG selector, bool write,
+                                         std::vector<unsigned char> data = {});
+    std::vector<unsigned char> request(unsigned short command, bool write,
+                                       const std::vector<unsigned char> &payload = {});
 
   public:
     void connect(const std::wstring &id);
@@ -59,6 +79,10 @@ class Camera {
     void wake(bool awake);
     bool sleeping();
     std::string diagnostics();
+    std::vector<Setting> settings();
+    std::vector<SettingValue> snapshotSettings();
+    void applySetting(const SettingValue &value);
+    void recall(const Preset &preset);
     void preview(HWND owner, int width, int height);
     void resizePreview(int width, int height);
     void stopPreview();

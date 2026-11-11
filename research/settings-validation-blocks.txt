@@ -1,0 +1,10 @@
+UNVERIFIED zone_home_pan: Camera readback did not confirm setting: zone_home_pan
+PASS zone_home_pan=0 auto=0
+UNVERIFIED hand_pan_min: Camera readback did not confirm setting: hand_pan_min
+PASS hand_pan_min=-45 auto=0
+PASS brightness=51 auto=0
+PASS white_balance=5000 auto=1
+PASS gesture_zoom=1 auto=0
+PASS composition_x=0 auto=0
+PASS ai_mode=0 auto=0
+2 setting checks need investigation
