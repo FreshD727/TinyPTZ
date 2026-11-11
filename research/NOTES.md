@@ -245,3 +245,25 @@ window messages. It verifies -9..9 mapping, .01 fractional steps, a 100000-step
 range, typed-value synchronization, partial input, automatic toggling, and
 selection/Apply behavior after refresh. No camera access or desktop automation
 was needed for this UI-only change.
+
+## Live slider adjustment (v0.3.4)
+
+`LiveSliderEdits` coalesces by setting/axis, limits intermediate writes to an
+80 ms cadence, and forces the release value. A recurring 25 ms window timer is
+started once, rather than restarted on every mouse event (which would debounce
+all writes until the drag stops). Readback waits 150 ms of idle input and never
+runs while the trackbar has mouse capture. UI rows update without rebuilding
+selection or resetting the dragged thumb. No extra COM thread/connection is
+introduced; all camera interfaces stay on their owning UI thread.
+
+`applySetting(value,false)` retains validation and writes immediately without
+ACK/readback delays. `verifySetting` performs selected-setting readback without
+rewriting. Existing calls default to verified application. A filtered settings
+query avoids scanning unrelated camera controls for each verification.
+
+`live-slider-validation.txt` records hardware standard/raw/scalar/block writes,
+final readback, and restoration. Observed intermediate writes took 0-16 ms for
+brightness, composition and timeout, and about 47 ms for zone-home read/modify/
+write. Native-control tests verify the leading live update, continuous-drag
+progress, newest-value coalescing, release flush, mouse-capture verification
+suppression, no writes from typing, and clearing failures without modal popups.

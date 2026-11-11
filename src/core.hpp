@@ -61,7 +61,8 @@ class Camera {
     std::vector<unsigned char> extension(ULONG selector, bool write,
                                          std::vector<unsigned char> data = {});
     std::vector<unsigned char> request(unsigned short command, bool write,
-                                       const std::vector<unsigned char> &payload = {});
+                                       const std::vector<unsigned char> &payload = {},
+                                       bool waitForReply = true);
 
   public:
     void connect(const std::wstring &id);
@@ -81,9 +82,11 @@ class Camera {
     bool sleeping();
     std::string diagnostics();
     std::string positionDiagnostics();
-    std::vector<Setting> settings();
+    std::vector<Setting> settings(const std::string &onlyKey = {});
     std::vector<SettingValue> snapshotSettings();
-    void applySetting(const SettingValue &value);
+    // Live intermediate writes skip readback; callers verify the final value.
+    void applySetting(const SettingValue &value, bool verify = true);
+    void verifySetting(const SettingValue &value);
     void recall(const Preset &preset);
     void restoreImageDefaults();
     std::vector<unsigned char> bootRecord();

@@ -255,7 +255,8 @@ std::vector<unsigned char> Camera::extension(ULONG selector, bool write,
     return data;
 }
 std::vector<unsigned char> Camera::request(unsigned short command, bool write,
-                                           const std::vector<unsigned char> &payload) {
+                                           const std::vector<unsigned char> &payload,
+                                           bool waitForReply) {
     if (payload.size() > 44)
         throw std::runtime_error("Vendor payload is too large");
     std::vector<unsigned char> b(60);
@@ -279,6 +280,8 @@ std::vector<unsigned char> Camera::request(unsigned short command, bool write,
         std::copy(report.begin(), report.end(), b.begin());
     }
     extension(2, true, b);
+    if (write && !waitForReply)
+        return {};
     for (int attempt = 0; attempt < 12; ++attempt) {
         std::this_thread::sleep_for(std::chrono::milliseconds(35));
         auto r = extension(2, false);
@@ -316,20 +319,26 @@ std::vector<unsigned char> Camera::request(unsigned short command, bool write,
         return {};
     throw std::runtime_error("Setting command timed out; read settings before retrying");
 }
-std::vector<Setting> Camera::settings() {
+std::vector<Setting> Camera::settings(const std::string &onlyKey) {
+    const Definition *requested = onlyKey.empty() ? nullptr : &find(onlyKey);
     std::vector<Setting> result;
     std::vector<unsigned char> status, ai;
     std::map<unsigned short, std::vector<unsigned char>> blocks;
     try {
-        status = extension(6, false);
+        if (!requested ||
+            (requested->backend != Backend::Camera && requested->backend != Backend::Image &&
+             requested->backend != Backend::Applied))
+            status = extension(6, false);
     } catch (...) {
     }
-    if (!status.empty() && status[9] == 1)
+    if ((!requested || requested->backend == Backend::Ai) && !status.empty() && status[9] == 1)
         try {
             ai = request(0x0104, false);
         } catch (...) {
         }
     for (auto &d : definitions()) {
+        if (requested && onlyKey != d.key)
+            continue;
         Setting s;
         s.current.key = d.key;
         s.name = d.name;
@@ -581,9 +590,9 @@ std::vector<SettingValue> Camera::snapshotSettings() {
             out.push_back(s.current);
     return out;
 }
-void Camera::applySetting(const SettingValue &v) {
+void Camera::applySetting(const SettingValue &v, bool verify) {
     if (v.key == "backlight") {
-        applySetting({"exposure_compensation", v.value - 9, v.automatic});
+        applySetting({"exposure_compensation", v.value - 9, v.automatic}, verify);
         return;
     }
     auto &d = find(v.key);
@@ -620,7 +629,7 @@ void Camera::applySetting(const SettingValue &v) {
                 unsigned int value = (unsigned int)v.value;
                 std::vector<unsigned char> bytes(4);
                 std::memcpy(bytes.data(), &value, 4);
-                request(d.set, true, bytes);
+                request(d.set, true, bytes, verify);
             } else if (v.key == "anti_flicker") {
                 ComPtr<IKsTopologyInfo> topology;
                 HRESULT hr = filter_.As(&topology);
@@ -681,21 +690,23 @@ void Camera::applySetting(const SettingValue &v) {
                     b[3] = (unsigned char)v.value;
                 }
                 extension(6, true, b);
-                std::this_thread::sleep_for(std::chrono::milliseconds(v.key == "hdr" ? 3100 : 120));
+                if (verify)
+                    std::this_thread::sleep_for(
+                        std::chrono::milliseconds(v.key == "hdr" ? 3100 : 120));
             }
         } else if (d.backend == Backend::Block) {
             if (d.property)
-                request(d.set, true, floatData(v.value));
+                request(d.set, true, floatData(v.value), verify);
             else {
                 auto value = request(d.get, false);
                 if (value.size() != 24)
                     throw std::runtime_error("Unsupported zone-home record layout");
                 auto bytes = floatData(v.value);
                 std::copy(bytes.begin(), bytes.end(), value.begin() + d.offset);
-                request(d.set, true, value);
+                request(d.set, true, value, verify);
             }
         } else if (d.backend == Backend::Scalar && d.property || v.key == "gesture_zoom_factor")
-            request(d.set, true, floatData(v.value));
+            request(d.set, true, floatData(v.value), verify);
         else {
             if (!d.set)
                 throw std::runtime_error("This setting is read only");
@@ -703,17 +714,23 @@ void Camera::applySetting(const SettingValue &v) {
                 int value = (int)v.value;
                 std::vector<unsigned char> bytes(4);
                 std::memcpy(bytes.data(), &value, 4);
-                request(d.set, true, bytes);
+                request(d.set, true, bytes, verify);
             } else
-                request(d.set, true, {(unsigned char)v.value});
+                request(d.set, true, {(unsigned char)v.value}, verify);
         }
     }
+    if (verify)
+        verifySetting(v);
+    appliedSettings_[v.key] = v;
+}
+void Camera::verifySetting(const SettingValue &v) {
+    auto &d = find(v.key);
     if (d.backend != Backend::Applied) {
         bool confirmed = false;
         for (int attempt = 0; attempt < 3 && !confirmed; ++attempt) {
             if (attempt)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            auto values = settings();
+            auto values = settings(v.key);
             auto current = std::find_if(values.begin(), values.end(),
                                         [&](auto &s) { return s.current.key == v.key; });
             confirmed = current != values.end() && current->readable &&
@@ -727,7 +744,6 @@ void Camera::applySetting(const SettingValue &v) {
                                           ? " (select an already uploaded slot)"
                                           : ""));
     }
-    appliedSettings_[v.key] = v;
 }
 void Camera::recall(const Preset &p) {
     if (p.device != id_)

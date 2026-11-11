@@ -11,13 +11,13 @@ $env:INCLUDE="$vc\include;$kit\Include\$version\ucrt;$kit\Include\$version\share
 $env:LIB="$vc\lib\x64;$kit\Lib\$version\ucrt\x64;$kit\Lib\$version\um\x64"
 $compiler="$vc\bin\Hostx64\x64\cl.exe"
 $common=@('/nologo','/EHsc','/std:c++17','/MT','/O2','/W4','/utf-8','/DUNICODE','/D_UNICODE','/DNOMINMAX','/Isrc')
-New-Item -ItemType Directory -Force build,build\v033,dist\TinyPTZ-v0.3.3 | Out-Null
+New-Item -ItemType Directory -Force build,build\v034,dist\TinyPTZ-v0.3.4 | Out-Null
 & $compiler @common /c src/camera.cpp src/presets.cpp src/protocol.cpp src/settings.cpp /Fobuild\
 if($LASTEXITCODE -ne 0){throw 'Core compilation failed'}
 & "$vc\bin\Hostx64\x64\lib.exe" /nologo /OUT:build/ptz_core.lib build/camera.obj build/presets.obj build/protocol.obj build/settings.obj
 if($LASTEXITCODE -ne 0){throw 'Core library build failed'}
 $libs=@('build/ptz_core.lib','ole32.lib','oleaut32.lib','strmiids.lib','user32.lib')
-& $compiler @common src/app.cpp src/settings_ui.cpp /Fobuild\ /Febuild/v033/TinyPTZ.exe @libs comctl32.lib comdlg32.lib shell32.lib gdi32.lib /link /SUBSYSTEM:WINDOWS
+& $compiler @common src/app.cpp src/settings_ui.cpp /Fobuild\ /Febuild/v034/TinyPTZ.exe @libs comctl32.lib comdlg32.lib shell32.lib gdi32.lib /link /SUBSYSTEM:WINDOWS
 if($LASTEXITCODE -ne 0){throw 'Desktop compilation failed'}
 & $compiler @common src/cli.cpp /Fobuild/cli.obj /Febuild/ptzctl.exe @libs
 if($LASTEXITCODE -ne 0){throw 'CLI compilation failed'}
@@ -29,13 +29,13 @@ if($LASTEXITCODE -ne 0){throw 'Core tests failed'}
 if($LASTEXITCODE -ne 0){throw 'Settings UI test compilation failed'}
 & .\build\settings_ui_tests.exe
 if($LASTEXITCODE -ne 0){throw 'Settings UI regression failed'}
-Copy-Item -LiteralPath build\v033\TinyPTZ.exe,build\ptzctl.exe,README.md -Destination dist\TinyPTZ-v0.3.3 -Force
-Copy-Item -LiteralPath docs -Destination dist\TinyPTZ-v0.3.3 -Recurse -Force
-New-Item -ItemType Directory -Force dist\TinyPTZ-v0.3.3\research | Out-Null
-Copy-Item -LiteralPath research\NOTES.md,research\hardware-validation.txt,research\settings-validation-final.txt,research\boot-validation.txt,research\image-controls-validation.txt,research\power-video-after.txt,research\position-precision-validation.txt -Destination dist\TinyPTZ-v0.3.3\research -Force
-$newPresets=Join-Path $PSScriptRoot 'dist\TinyPTZ-v0.3.3\data\presets.ptz'
+Copy-Item -LiteralPath build\v034\TinyPTZ.exe,build\ptzctl.exe,README.md -Destination dist\TinyPTZ-v0.3.4 -Force
+Copy-Item -LiteralPath docs -Destination dist\TinyPTZ-v0.3.4 -Recurse -Force
+New-Item -ItemType Directory -Force dist\TinyPTZ-v0.3.4\research | Out-Null
+Copy-Item -LiteralPath research\NOTES.md,research\hardware-validation.txt,research\settings-validation-final.txt,research\boot-validation.txt,research\image-controls-validation.txt,research\power-video-after.txt,research\position-precision-validation.txt,research\live-slider-validation.txt -Destination dist\TinyPTZ-v0.3.4\research -Force
+$newPresets=Join-Path $PSScriptRoot 'dist\TinyPTZ-v0.3.4\data\presets.ptz'
 if(-not (Test-Path -LiteralPath $newPresets)){
-    foreach($oldPresets in @('dist\TinyPTZ-v0.3.2\data\presets.ptz','dist\TinyPTZ-v0.3.1\data\presets.ptz','dist\TinyPTZ-v0.3\data\presets.ptz','dist\TinyPTZ-v0.2\data\presets.ptz','dist\TinyPTZ\data\presets.ptz','build\data\presets.ptz')){
+    foreach($oldPresets in @('dist\TinyPTZ-v0.3.3\data\presets.ptz','dist\TinyPTZ-v0.3.2\data\presets.ptz','dist\TinyPTZ-v0.3.1\data\presets.ptz','dist\TinyPTZ-v0.3\data\presets.ptz','dist\TinyPTZ-v0.2\data\presets.ptz','dist\TinyPTZ\data\presets.ptz','build\data\presets.ptz')){
         if(Test-Path -LiteralPath $oldPresets){
             New-Item -ItemType Directory -Force (Split-Path -Parent $newPresets) | Out-Null
             Copy-Item -LiteralPath $oldPresets -Destination $newPresets
@@ -43,5 +43,5 @@ if(-not (Test-Path -LiteralPath $newPresets)){
         }
     }
 }
-if($Package){Compress-Archive -LiteralPath dist\TinyPTZ-v0.3.3 -DestinationPath dist\TinyPTZ-v0.3.3-Windows-x64.zip -Force}
-Write-Host 'Portable app: dist\TinyPTZ-v0.3.3\TinyPTZ.exe'
+if($Package){Compress-Archive -LiteralPath dist\TinyPTZ-v0.3.4 -DestinationPath dist\TinyPTZ-v0.3.4-Windows-x64.zip -Force}
+Write-Host 'Portable app: dist\TinyPTZ-v0.3.4\TinyPTZ.exe'

@@ -76,6 +76,50 @@ void hardwareTest(Camera &c) {
         throw;
     }
 }
+void liveSettingsTest(Camera &c) {
+    bool asleep = c.sleeping();
+    c.wake(true);
+    auto all = c.settings();
+    std::vector<SettingValue> originals;
+    auto restore = [&] {
+        for (auto i = originals.rbegin(); i != originals.rend(); ++i)
+            c.applySetting(*i);
+        if (asleep)
+            c.wake(false);
+    };
+    try {
+        for (auto key : {"brightness", "composition_x", "auto_sleep", "zone_home_pan"}) {
+            auto i =
+                std::find_if(all.begin(), all.end(), [&](auto &s) { return s.current.key == key; });
+            if (i == all.end() || !i->readable || !i->writable)
+                throw std::runtime_error("Live test control unavailable");
+            originals.push_back(i->current);
+            auto value = i->current;
+            double direction = value.value + 3 * i->step <= i->maximum ? 1 : -1;
+            for (int tick = 1; tick <= 3; ++tick) {
+                value.value = i->current.value + direction * tick * i->step;
+                auto start = GetTickCount64();
+                c.applySetting(value, false);
+                std::cout << "Live " << key << "=" << value.value
+                          << " write_ms=" << (GetTickCount64() - start) << "\n";
+                Sleep(90);
+            }
+            Sleep(160);
+            c.verifySetting(value);
+            std::cout << "PASS final readback " << key << "=" << value.value << "\n";
+        }
+        restore();
+        std::cout << "PASS: immediate standard, raw, scalar and read-modify-write settings; final "
+                     "readback; original settings restored\n";
+    } catch (...) {
+        try {
+            restore();
+        } catch (const std::exception &e) {
+            std::cerr << "Restore error: " << e.what() << "\n";
+        }
+        throw;
+    }
+}
 void positionTest(Camera &c) {
     bool asleep = c.sleeping();
     c.wake(true);
@@ -350,7 +394,8 @@ int wmain(int argc, wchar_t **argv) {
                 cmd != L"settings" && cmd != L"set" && cmd != L"settings-test" &&
                 cmd != L"boot-read" && cmd != L"image-defaults" && cmd != L"boot-test" &&
                 cmd != L"set-boot" && cmd != L"image-controls-test" && cmd != L"power-session" &&
-                cmd != L"position-details" && cmd != L"position-test")
+                cmd != L"position-details" && cmd != L"position-test" &&
+                cmd != L"live-settings-test")
                 throw std::runtime_error("Unknown command; use --help");
             std::wstring id, name;
             SettingValue setting;
@@ -391,7 +436,9 @@ int wmain(int argc, wchar_t **argv) {
                     "Tiny SE not found. Use devices, then --device with its exact ID.");
             Camera c;
             c.connect(id);
-            if (cmd == L"position-test") {
+            if (cmd == L"live-settings-test") {
+                liveSettingsTest(c);
+            } else if (cmd == L"position-test") {
                 positionTest(c);
             } else if (cmd == L"position-details") {
                 std::cout << c.positionDiagnostics();

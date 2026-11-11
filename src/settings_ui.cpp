@@ -1,8 +1,10 @@
 #include "core.hpp"
+#include "live_slider.hpp"
 #include "numeric_slider.hpp"
 #include <algorithm>
 #include <cmath>
 #include <commctrl.h>
+#include <functional>
 #include <iomanip>
 #include <sstream>
 namespace ptz {
@@ -12,6 +14,8 @@ struct Editor {
     HWND owner, window, category, list, value, choices, automatic, range, details, apply, defaults,
         selectedDefault;
     NumericSlider numeric;
+    LiveSliderEdits<std::string, double> live;
+    std::function<void(const SettingValue &, bool)> liveApply;
     HFONT font;
     bool refreshing = false;
     std::vector<Setting> settings;
@@ -93,7 +97,51 @@ void refreshSettings(Editor &e, std::vector<Setting> settings) {
             break;
         }
 }
+constexpr UINT_PTR liveTimer = 7001;
+void processLive(Editor &e, std::uint64_t now, bool force = false) {
+    e.live.tick(
+        now, GetCapture() == e.numeric.track,
+        [&](const std::string &key, double value, bool verify) {
+            SettingValue change{key, value, false};
+            if (e.liveApply)
+                e.liveApply(change, verify);
+            else if (verify)
+                e.camera->verifySetting(change);
+            else
+                e.camera->applySetting(change, false);
+            auto i = std::find_if(e.settings.begin(), e.settings.end(),
+                                  [&](auto &s) { return s.current.key == key; });
+            if (i != e.settings.end()) {
+                i->current = change;
+                std::wstring text = format(value) + (verify && i->readable ? L"" : L" (sent)");
+                for (size_t row = 0; row < e.rows.size(); ++row)
+                    if (e.settings[e.rows[row]].current.key == key)
+                        ListView_SetItemText(e.list, (int)row, 1, text.data());
+                auto *current = selected(e);
+                if (current && current->current.key == key)
+                    SetWindowTextW(
+                        e.details,
+                        verify
+                            ? L"Live setting confirmed by camera readback."
+                            : L"Live update sent. Readback follows when you release the slider.");
+            }
+        },
+        force);
+    if (!e.live.active())
+        KillTimer(e.window, liveTimer);
+}
+void flushLive(Editor &e) {
+    try {
+        processLive(e, GetTickCount64(), true);
+    } catch (...) {
+        e.live.clear();
+        KillTimer(e.window, liveTimer);
+        throw;
+    }
+}
 void load(Editor &e) {
+    flushLive(e);
+    e.live.clear();
     refreshSettings(e, e.camera->settings());
 }
 void showSelection(Editor &e) {
@@ -191,11 +239,34 @@ LRESULT CALLBACK procedure(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
         if (!e)
             return DefWindowProcW(w, msg, wp, lp);
         if (msg == WM_HSCROLL && (HWND)lp == e->numeric.track) {
+            auto *s = selected(*e);
+            if (!s || !s->writable || !IsWindowEnabled(e->numeric.track))
+                return 0;
             e->numeric.fromTrack();
+            wchar_t text[128]{};
+            GetWindowTextW(e->value, text, 128);
+            int action = LOWORD(wp);
+            bool running = e->live.active();
+            e->live.stage(s->current.key, std::stod(text),
+                          action == TB_ENDTRACK || action == TB_THUMBPOSITION, GetTickCount64());
+            if (!running)
+                SetTimer(w, liveTimer, 25, nullptr);
+            return 0;
+        }
+        if (msg == WM_TIMER && wp == liveTimer) {
+            try {
+                processLive(*e, GetTickCount64());
+            } catch (const std::exception &ex) {
+                e->live.clear();
+                KillTimer(w, liveTimer);
+                SetWindowTextW(e->details, (L"Live update failed: " + wide(ex.what())).c_str());
+            }
             return 0;
         }
         if (msg == WM_COMMAND) {
             int id = LOWORD(wp);
+            if (id == 2 || id == 7 || id == 8 || id == 9 || id == 10)
+                flushLive(*e);
             if (id == 4 && HIWORD(wp) == EN_CHANGE) {
                 e->numeric.fromEdit();
                 return 0;
@@ -273,7 +344,13 @@ LRESULT CALLBACK procedure(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
                 showSelection(*e);
             return 0;
         }
+        if (msg == WM_DESTROY) {
+            KillTimer(w, liveTimer);
+            e->live.clear();
+            return 0;
+        }
         if (msg == WM_CLOSE) {
+            flushLive(*e);
             DestroyWindow(w);
             return 0;
         }

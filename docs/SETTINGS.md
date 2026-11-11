@@ -160,3 +160,25 @@ Native-control regression tests run under a hidden parent window and exercise
 negative/fractional/large ranges, both synchronization directions, partial
 text input, automatic mode, and repeated Apply selection preservation. This
 UI change does not alter camera commands or the preset file format.
+
+## Live slider adjustment (v0.3.4)
+
+Numeric setting sliders and Pan/Tilt/Zoom sliders now send changes while you
+drag. No Apply click is required for slider movements. Number fields still
+follow the thumb; typed edits and named selectors use their existing Apply
+buttons. Automatic/read-only/unsupported controls remain protected.
+
+Updates are throttled to about one per 80-100 ms, retaining the newest value
+for each setting/axis. Releasing sends the final pending value promptly.
+Settings readback is deferred until input is idle and the slider releases
+mouse capture, so verification does not repeatedly block a drag. Live errors
+appear in the details/status area. Pending changes are flushed before closing,
+manual Apply, defaults, preset actions, and camera changes. PTZ movement still
+takes time mechanically; allow it to settle before saving the current pose.
+
+The live write path performs normal range/mode validation but skips synchronous
+ACK waits and full-setting scans during intermediate writes. Final verification
+reads only the affected setting. Native-control tests cover updates before
+release, coalescing, final-value delivery, delayed verification, typed input,
+and failure recovery. Hardware tests exercised standard, raw, scalar, and
+read-modify-write controls and restored their original values.

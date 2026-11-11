@@ -10,7 +10,48 @@ int main() {
     try {
         INITCOMMONCONTROLSEX init{sizeof(init), ICC_LISTVIEW_CLASSES | ICC_BAR_CLASSES};
         InitCommonControlsEx(&init);
+        LiveSliderEdits<std::string, double> coalesced;
+        std::vector<std::pair<double, bool>> events;
+        auto record = [&](const std::string &, double value, bool verify) {
+            events.push_back({value, verify});
+        };
+        coalesced.stage("x", 1, false, 0);
+        coalesced.tick(0, true, record);
+        require(events.size() == 1 && events[0].first == 1 && !events[0].second,
+                "drag starts with live write before release");
+        coalesced.stage("x", 2, false, 10);
+        coalesced.stage("x", 3, false, 20);
+        coalesced.tick(30, true, record);
+        require(events.size() == 1, "drag writes are throttled");
+        coalesced.tick(80, true, record);
+        require(events.size() == 2 && events.back().first == 3,
+                "newest drag value replaces intermediate values");
+        coalesced.stage("x", 4, true, 90);
+        coalesced.tick(90, true, record);
+        require(events.size() == 3 && events.back().first == 4,
+                "released final value bypasses throttle");
+        coalesced.tick(500, true, record);
+        require(events.size() == 3, "no blocking readback while mouse is captured");
+        coalesced.tick(501, false, record);
+        require(events.size() == 4 && events.back().first == 4 && events.back().second,
+                "release verifies final value once");
+        require(!coalesced.active(), "live queue becomes idle after verification");
+        coalesced.stage("x", 4, false, 600);
+        coalesced.tick(600, true, record);
+        require(events.size() == 5 && !events.back().second,
+                "new gestures reapply even previously confirmed values");
+        coalesced.stage("x", 5, false, 610);
+        coalesced.stage("x", 4, true, 620);
+        coalesced.tick(620, true, record);
+        require(events.size() == 5, "returning to sent value cancels obsolete pending target");
+        coalesced.tick(800, false, record);
+        require(events.back().first == 4 && events.back().second,
+                "cancelled intermediate target is never applied");
         Editor e{};
+        std::vector<SettingValue> liveWrites, liveChecks;
+        e.liveApply = [&](const SettingValue &value, bool verify) {
+            (verify ? liveChecks : liveWrites).push_back(value);
+        };
         e.window = CreateWindowExW(0, L"STATIC", L"Hidden settings test", WS_OVERLAPPED, 0, 0, 780,
                                    750, nullptr, nullptr, nullptr, nullptr);
         require(e.window != nullptr, "hidden parent creation");
@@ -113,6 +154,28 @@ int main() {
         require(IsWindowEnabled(e.numeric.track) && IsWindowEnabled(e.value),
                 "disabling automatic mode enables manual input");
         require(IsWindowEnabled(e.apply), "slider/manual mode edits preserve Apply availability");
+        // Dispatch actual timer messages while slider input is still arriving.
+        e.live.clear();
+        liveWrites.clear();
+        liveChecks.clear();
+        for (int tick = 1; tick <= 8; ++tick) {
+            drag(tick);
+            Sleep(10);
+            MSG message;
+            while (PeekMessageW(&message, e.window, WM_TIMER, WM_TIMER, PM_REMOVE))
+                DispatchMessageW(&message);
+        }
+        require(!liveWrites.empty(),
+                "continuous dragging must apply before release, not debounce until it stops");
+        require(liveChecks.empty(), "readback is deferred during continuous edits");
+        SendMessageW(e.window, WM_HSCROLL, TB_ENDTRACK, (LPARAM)e.numeric.track);
+        flushLive(e);
+        require(!liveChecks.empty() && liveChecks.back().value == -1,
+                "last released native slider value is verified without Apply");
+        size_t writes = liveWrites.size();
+        SetWindowTextW(e.value, L"2");
+        SendMessageW(e.window, WM_TIMER, liveTimer, 0);
+        require(liveWrites.size() == writes, "typing alone must not send partial values to camera");
         ListView_SetItemState(e.list, 1, LVIS_SELECTED | LVIS_FOCUSED,
                               LVIS_SELECTED | LVIS_FOCUSED);
         showSelection(e);
@@ -128,6 +191,27 @@ int main() {
             require(SendMessageW(e.choices, CB_GETCURSEL, 0, 0) == (LRESULT)value,
                     "editor must display refreshed value");
         }
+        e.live.clear();
+        KillTimer(e.window, liveTimer);
+        refreshSettings(e, {numeric, choice});
+        ListView_SetItemState(e.list, 0, LVIS_SELECTED | LVIS_FOCUSED,
+                              LVIS_SELECTED | LVIS_FOCUSED);
+        showSelection(e);
+        e.liveApply = [](const SettingValue &, bool verify) {
+            if (verify)
+                throw std::runtime_error("simulated readback failure");
+        };
+        e.live.stage(numeric.current.key, 2, true, GetTickCount64() - 200);
+        SendMessageW(e.window, WM_TIMER, liveTimer, 0);
+        require(!e.live.active(),
+                "failed live verification must clear queued edits so Close/Apply can recover");
+        wchar_t failure[256]{};
+        GetWindowTextW(e.details, failure, 256);
+        require(std::wstring(failure).find(L"Live update failed:") == 0,
+                "live errors are visible without a drag-blocking modal popup");
+        e.liveApply = [&](const SettingValue &value, bool verify) {
+            (verify ? liveChecks : liveWrites).push_back(value);
+        };
         numeric.writable = false;
         refreshSettings(e, {numeric, choice});
         ListView_SetItemState(e.list, 0, LVIS_SELECTED | LVIS_FOCUSED,
@@ -140,8 +224,11 @@ int main() {
         choice.writable = false;
         refreshSettings(e, {numeric, choice});
         require(!IsWindowEnabled(e.apply), "unsupported control must disable Apply");
+        e.live.clear();
+        KillTimer(e.window, liveTimer);
         DestroyWindow(e.window);
-        std::cout << "PASS: native numeric sliders, negative/fractional/large ranges, text "
+        std::cout << "PASS: live drag writes, coalescing, final release/readback, failure "
+                     "recovery, native numeric sliders, negative/fractional/large ranges, text "
                      "synchronization, auto mode, selection and repeated Apply; "
                      "unsupported controls disabled\n";
         return 0;

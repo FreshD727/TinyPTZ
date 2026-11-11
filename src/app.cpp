@@ -1,4 +1,5 @@
 #include "core.hpp"
+#include "live_slider.hpp"
 #include "numeric_slider.hpp"
 #include <algorithm>
 #include <commctrl.h>
@@ -49,6 +50,8 @@ enum {
 HINSTANCE instance;
 HWND mainWindow, deviceBox, status, previewHost, list, searchBox, nameBox, panBox, tiltBox, zoomBox;
 NumericSlider panControl, tiltControl, zoomControl;
+LiveSliderEdits<long, long> livePosition;
+constexpr UINT_PTR positionTimer = 7002;
 HFONT font, titleFont;
 HBRUSH background;
 Camera camera;
@@ -86,6 +89,26 @@ void error(const std::exception &e) {
     auto s = wide(e.what());
     message(s);
     MessageBoxW(mainWindow, s.c_str(), L"Tiny PTZ", MB_OK | MB_ICONWARNING);
+}
+void processLivePosition(bool force = false) {
+    try {
+        livePosition.tick(
+            GetTickCount64(),
+            GetCapture() == panControl.track || GetCapture() == tiltControl.track ||
+                GetCapture() == zoomControl.track,
+            [&](long axis, long value, bool verify) {
+                if (!verify)
+                    camera.setAxis(axis, value);
+                message(L"Live position sent. Allow the camera to settle before saving a preset.");
+            },
+            force);
+    } catch (...) {
+        livePosition.clear();
+        KillTimer(mainWindow, positionTimer);
+        throw;
+    }
+    if (!livePosition.active())
+        KillTimer(mainWindow, positionTimer);
 }
 void showPosition() {
     auto p = camera.read();
@@ -239,6 +262,7 @@ void fileTransfer(bool importing) {
     }
 }
 void command(int id) {
+    processLivePosition(true);
     if (id == SettingsButton) {
         showSettings(mainWindow, camera);
         return;
@@ -470,9 +494,33 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_HSCROLL:
             for (auto *slider : {&panControl, &tiltControl, &zoomControl})
                 if ((HWND)lp == slider->track) {
+                    if (!camera.connected() || !IsWindowEnabled(slider->track))
+                        return 0;
                     slider->fromTrack();
+                    long axis = slider == &panControl    ? CameraControl_Pan
+                                : slider == &tiltControl ? CameraControl_Tilt
+                                                         : CameraControl_Zoom;
+                    int action = LOWORD(wp);
+                    bool running = livePosition.active();
+                    livePosition.stage(axis, number(slider->edit),
+                                       action == TB_ENDTRACK || action == TB_THUMBPOSITION,
+                                       GetTickCount64());
+                    if (!running)
+                        SetTimer(w, positionTimer, 25, nullptr);
                     return 0;
                 }
+            break;
+        case WM_TIMER:
+            if (wp == positionTimer) {
+                try {
+                    processLivePosition();
+                } catch (const std::exception &e) {
+                    livePosition.clear();
+                    KillTimer(w, positionTimer);
+                    message(L"Live position failed: " + wide(e.what()));
+                }
+                return 0;
+            }
             break;
         case WM_COMMAND: {
             int id = LOWORD(wp);
@@ -485,6 +533,8 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
                 return 0;
             }
             if (id == Devices && HIWORD(wp) == CBN_SELCHANGE) {
+                processLivePosition(true);
+                livePosition.clear();
                 camera.disconnect();
                 for (auto *slider : {&panControl, &tiltControl, &zoomControl}) {
                     slider->valid = false;
@@ -525,9 +575,12 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             return (LRESULT)background;
         }
         case WM_CLOSE:
+            processLivePosition(true);
             DestroyWindow(w);
             return 0;
         case WM_DESTROY:
+            livePosition.clear();
+            KillTimer(w, positionTimer);
             try {
                 camera.disconnect();
             } catch (const std::exception &e) {

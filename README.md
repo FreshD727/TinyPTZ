@@ -8,23 +8,23 @@ This independent app uses Windows camera interfaces directly; see the
 
 ## Run
 
-Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ-v0.3.3` after building).
+Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ-v0.3.4` after building).
 No installation, administrator access, Node,
 Python, .NET runtime or OBSBOT Center is needed to run the built app.
 The C++ runtime is statically linked; Windows supplies DirectShow.
-Move the entire TinyPTZ-v0.3.3 folder to any writable location (including USB storage).
+Move the entire TinyPTZ-v0.3.4 folder to any writable location (including USB storage).
 Presets are created in `data/presets.ptz` beside the executable.
 Do not run multiple writers (GUI, CLI or two copies) against the same data file.
 
 1. Select the Tiny SE and click **Connect**. This wakes the camera for control.
 2. Start preview if desired. Leave preview off when OBS is using the camera.
 3. Use the direction/zoom buttons, or use the Pan, Tilt, and Zoom sliders and
-   number fields, then choose **Apply position**. Sliders use the camera's
-   reported limits and step. Dragging stages a value until you apply it.
+   number fields. Sliders move the camera live while dragging, using its
+   reported limits and step. Typed position values use **Apply position**.
 4. Open **Settings...** to edit Tracking, Image, or Device controls. Select a
-   row, use its numeric slider/number field or choose a value, then Apply.
-   Sliders and number fields stay synchronized, including negative values and
-   fractional steps. Automatic mode disables manual input until unchecked.
+   row and drag its numeric slider to apply changes live. Typed values and
+   named choices still use Apply. Sliders and number fields stay synchronized,
+   including negative values and fractional steps. Automatic mode disables manual input until unchecked.
    The current value is read back from the camera. Set-only requests are labeled
    explicitly. The Settings button is at the top right of the main window.
 5. In Image settings, **Default selected** restores one control; **Restore image
@@ -130,7 +130,7 @@ Requires Windows, Visual Studio C++ Build Tools and Windows SDK. Run:
 
 This builds the native portable executables, runs core and hidden native-control
 regression tests, and creates
-`dist/TinyPTZ-v0.3.3-Windows-x64.zip`. CMake is also supported. No third-party binary
+`dist/TinyPTZ-v0.3.4-Windows-x64.zip`. CMake is also supported. No third-party binary
 from OBSBOT is bundled or loaded by the app. The development encoder probe
 loads the installed DLL only to generate reference packets.
 
