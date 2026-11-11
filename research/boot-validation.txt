@@ -1,0 +1,3 @@
+5 5 1
+Firmware boot-position recall: target=5,5,1 actual=5,5,1
+PASS: device boot position write, reconnect persistence, firmware recall, original boot and camera state restored

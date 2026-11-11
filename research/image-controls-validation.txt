@@ -1,0 +1,4 @@
+PASS exposure_compensation=-9 (verified readback)
+PASS exposure_compensation=9 (verified readback)
+PASS exposure_compensation=0 (verified readback)
+PASS: image compensation range, neutral default, repeated writes, original value restored

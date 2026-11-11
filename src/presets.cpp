@@ -52,9 +52,14 @@ void PresetStore::load() {
                 SettingValue v;
                 int automatic;
                 if (!(s >> std::quoted(v.key) >> v.value >> automatic) || !std::isfinite(v.value) ||
-                    v.key.empty() || (automatic != 0 && automatic != 1) ||
-                    !keys.insert(v.key).second)
+                    v.key.empty() || (automatic != 0 && automatic != 1))
                     throw std::runtime_error("Invalid preset settings; original file preserved");
+                if (v.key == "backlight") {
+                    v.key = "exposure_compensation";
+                    v.value -= 9;
+                }
+                if (!keys.insert(v.key).second)
+                    throw std::runtime_error("Duplicate preset setting");
                 v.automatic = automatic != 0;
                 p.settings.push_back(std::move(v));
             }

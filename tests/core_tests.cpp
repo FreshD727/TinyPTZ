@@ -55,6 +55,22 @@ int main() {
         backup += L".v1.backup";
         require(std::filesystem::exists(backup), "v1 migration keeps backup");
         std::filesystem::remove(backup);
+        auto legacySettingsPath = path;
+        legacySettingsPath += L".v2";
+        {
+            std::ofstream f(legacySettingsPath);
+            f << "TINY_PTZ_PRESETS 2\n\"Old image\" \"camera-id\" 0 0 0 1 \"backlight\" 9 0\n";
+        }
+        PresetStore legacySettings(legacySettingsPath);
+        legacySettings.load();
+        require(legacySettings.items[0].settings[0].key == "exposure_compensation" &&
+                    legacySettings.items[0].settings[0].value == 0,
+                "legacy compensation migration");
+        legacySettings.save();
+        legacySettings.load();
+        require(legacySettings.items[0].settings[0].value == 0,
+                "compensation migration is not repeated");
+        std::filesystem::remove(legacySettingsPath);
         require(other.items[999].name == s.items[999].name, "Unicode and quoted names roundtrip");
         require(other.items[999].position.zoom == 3, "PTZ roundtrip");
         require(quantize(7, {-10, 10, 3, 0, true}) == 8, "step quantization");

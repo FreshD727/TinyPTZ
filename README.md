@@ -8,11 +8,11 @@ This independent app uses Windows camera interfaces directly; see the
 
 ## Run
 
-Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ-v0.2` after building).
+Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ-v0.3` after building).
 No installation, administrator access, Node,
 Python, .NET runtime or OBSBOT Center is needed to run the built app.
 The C++ runtime is statically linked; Windows supplies DirectShow.
-Move the entire TinyPTZ-v0.2 folder to any writable location (including USB storage).
+Move the entire TinyPTZ-v0.3 folder to any writable location (including USB storage).
 Presets are created in `data/presets.ptz` beside the executable.
 Do not run multiple writers (GUI, CLI or two copies) against the same data file.
 
@@ -23,11 +23,15 @@ Do not run multiple writers (GUI, CLI or two copies) against the same data file.
 4. Open **Settings...** to edit Tracking, Image, or Device controls. Select a
    row, choose a value (or Automatic where available), and Apply. The current
    value is read back from the camera. Set-only requests are labeled explicitly.
-5. Leave **Include tracking, image and device settings when saving presets**
+5. In Image settings, **Default selected** restores one control; **Restore image
+   defaults** resets the image controls together. Exposure Compensation uses
+   -9 to +9 with a neutral default of 0. Apply keeps the selected setting ready
+   for another edit.
+6. Leave **Include tracking, image and device settings when saving presets**
    checked to capture settings, or uncheck it for PTZ-only presets.
-6. Wait for movement to finish, click **Read position**, enter a name, and
+7. Wait for movement to finish, click **Read position**, enter a name, and
    choose **Save current**.
-7. Select a preset and choose **Recall selected**, or double-click its row.
+8. Select a preset and choose **Recall selected**, or double-click its row.
 
 Use **Update selected** to replace a preset's position and settings, **Rename**, **Delete**,
 search, and **Import/Export** to manage the library. Import merges all camera
@@ -35,6 +39,16 @@ records and adds suffixes for duplicate names. Presets retain their camera
 identity. Reconnecting on a different USB port or PC may change that identity;
 edit the exported UTF-8 file's quoted device IDs using `ptzctl devices` if needed.
 The three on-camera preset slots are not modified or imported.
+
+To use a saved PTZ position when the camera powers on, select its preset and
+click **Set as boot position**. The position is written to the camera and read
+back for confirmation; Tiny PTZ does not need to run at startup. This stores
+pan, tilt and zoom, independently of the preset's image/tracking snapshot.
+The existing Device / Startup tracking mode remains in effect; choose Off if
+you want the boot framing to stay fixed. Each camera has one boot position;
+setting another replaces it. Editing/deleting the local preset afterward does
+not change the stored boot position. A firmware recall and connection reopen
+were tested; a physical USB power cycle has not been tested.
 
 The **Wake** and **Sleep** buttons control the gimbal power state. The app holds
 a no-stream sleep guard while controlling the camera and releases it on Sleep
@@ -64,11 +78,15 @@ ptzctl read
 ptzctl wake
 ptzctl sleep
 ptzctl settings
+ptzctl image-defaults
+ptzctl set exposure_compensation 0
 ptzctl set brightness 50
 ptzctl set white_balance 5000 --auto
 ptzctl set ai_mode 2
 ptzctl save "Desk"
 ptzctl recall "Desk"
+ptzctl set-boot "Desk"
+ptzctl boot-read
 ptzctl recall "Desk" --device "EXACT DEVICE ID"
 ```
 
@@ -96,8 +114,9 @@ Requires Windows, Visual Studio C++ Build Tools and Windows SDK. Run:
 .\build.ps1 -Package
 ```
 
-This builds the native portable executables, runs the core tests, and creates
-`dist/TinyPTZ-v0.2-Windows-x64.zip`. CMake is also supported. No third-party binary
+This builds the native portable executables, runs core and hidden native-control
+regression tests, and creates
+`dist/TinyPTZ-v0.3-Windows-x64.zip`. CMake is also supported. No third-party binary
 from OBSBOT is bundled or loaded by the app. The development encoder probe
 loads the installed DLL only to generate reference packets.
 

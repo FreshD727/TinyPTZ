@@ -37,7 +37,7 @@ const std::vector<Definition> &definitions() {
         standard("gamma", L"Gamma", Backend::Image, VideoProcAmp_Gamma);
         standard("white_balance", L"White balance temperature", Backend::Image,
                  VideoProcAmp_WhiteBalance);
-        standard("backlight", L"Backlight compensation", Backend::Image,
+        standard("exposure_compensation", L"Exposure Compensation", Backend::Image,
                  VideoProcAmp_BacklightCompensation);
         standard("gain", L"Gain", Backend::Image, VideoProcAmp_Gain);
         standard("focus", L"Focus", Backend::Camera, CameraControl_Focus);
@@ -259,7 +259,7 @@ std::vector<unsigned char> Camera::request(unsigned short command, bool write,
         throw std::runtime_error("Vendor payload is too large");
     std::vector<unsigned char> b(60);
     b[0] = 0xaa;
-    b[1] = write ? 0x25 : (payload.empty() ? 1 : 0x21);
+    b[1] = write ? (payload.empty() ? 5 : 0x25) : (payload.empty() ? 1 : 0x21);
     put(b, 2, ++sequence_);
     put(b, 4, 12);
     b[8] = 0xa;
@@ -348,7 +348,15 @@ std::vector<Setting> Camera::settings() {
                                                   : procamp_->Get(d.property, &value, &flags);
                 if (FAILED(hr))
                     throw std::runtime_error("Camera could not read this setting");
+                s.defaultValue = {d.key, (double)normal, (support & 1) != 0};
+                s.defaultAvailable = true;
                 s.current.value = value;
+                if (s.current.key == "exposure_compensation") {
+                    s.current.value -= 9;
+                    lo -= 9;
+                    hi -= 9;
+                    s.defaultValue.value = 0;
+                }
                 s.current.automatic = (flags & 1) != 0;
                 s.minimum = lo;
                 s.maximum = hi;
@@ -417,6 +425,16 @@ std::vector<Setting> Camera::settings() {
                 } else
                     s.details = L"Set only; last request can be saved after applying";
             }
+            if (s.group == L"Image" && s.writable && !s.defaultAvailable) {
+                const std::map<std::string, double> defaults{
+                    {"hdr", 0}, {"anti_flicker", 1}, {"face_exposure", 1}, {"face_focus", 1},
+                    {"fov", 0}, {"mirror", 0},       {"image_style", 0}};
+                auto i = defaults.find(s.current.key);
+                if (i != defaults.end()) {
+                    s.defaultValue = {s.current.key, i->second, false};
+                    s.defaultAvailable = true;
+                }
+            }
             if (s.details.empty())
                 s.details = s.writable ? L"Camera readback" : L"Read only";
         } catch (const std::exception &e) {
@@ -428,6 +446,113 @@ std::vector<Setting> Camera::settings() {
     }
     return result;
 }
+void Camera::restoreImageDefaults() {
+    wake(true);
+    auto all = settings();
+    auto get = [&](const std::string &key) -> Setting * {
+        auto i =
+            std::find_if(all.begin(), all.end(), [&](auto &s) { return s.current.key == key; });
+        return i == all.end() ? nullptr : &*i;
+    };
+    for (auto key : {"image_style", "hdr"}) {
+        auto *s = get(key);
+        if (s && s->writable && s->defaultAvailable)
+            applySetting(s->defaultValue);
+    }
+    auto *exposure = get("exposure"), *gain = get("gain");
+    if (gain && gain->writable && gain->defaultAvailable && exposure && exposure->writable) {
+        auto manual = exposure->current;
+        manual.automatic = false;
+        applySetting(manual);
+        applySetting(gain->defaultValue);
+    }
+    for (auto &s : all)
+        if (s.group == L"Image" && s.writable && s.defaultAvailable &&
+            s.current.key != "image_style" && s.current.key != "hdr" && s.current.key != "gain" &&
+            s.current.key != "exposure")
+            applySetting(s.defaultValue);
+    if (exposure && exposure->writable && exposure->defaultAvailable)
+        applySetting(exposure->defaultValue);
+}
+std::vector<unsigned char> Camera::bootRecord() {
+    wake(true);
+    std::vector<unsigned char> b;
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        try {
+            b = request(0x3884, false);
+            break;
+        } catch (...) {
+            if (attempt == 2)
+                throw;
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        }
+    }
+    if (b.size() != 24)
+        throw std::runtime_error("Unsupported camera boot-position layout");
+    return b;
+}
+void Camera::writeBootRecord(const std::vector<unsigned char> &b) {
+    if (b.size() != 24)
+        throw std::runtime_error("Invalid boot position");
+    wake(true);
+    request(0x3844, true, b);
+    auto actual = bootRecord();
+    for (int offset : {4, 8, 12, 16}) {
+        float expected, got;
+        std::memcpy(&expected, b.data() + offset, 4);
+        std::memcpy(&got, actual.data() + offset, 4);
+        if (!std::isfinite(got) || std::abs(got - expected) > .02)
+            throw std::runtime_error("Camera did not confirm stored boot position");
+    }
+}
+void Camera::setBootPreset(const Preset &p) {
+    if (p.device != id_)
+        throw std::runtime_error("Preset belongs to a different camera");
+    for (auto entry : {std::pair<int, long>{CameraControl_Pan, p.position.pan},
+                       {CameraControl_Tilt, p.position.tilt},
+                       {CameraControl_Zoom, p.position.zoom}}) {
+        auto r = range(entry.first);
+        if (!r.supported || entry.second < r.min || entry.second > r.max)
+            throw std::runtime_error("Preset position is outside camera limits");
+    }
+    auto zoom = range(CameraControl_Zoom);
+    if (zoom.min != 0 || zoom.max != 12 || zoom.step != 1)
+        throw std::runtime_error(
+            "Boot preset conversion requires the validated Tiny SE zoom range (0..12)");
+    auto original = bootRecord();
+    auto b = original;
+    for (auto field : {std::pair<int, double>{4, (double)p.position.pan},
+                       {8, -(double)p.position.tilt},
+                       {12, 0},
+                       {16, 1.0 + p.position.zoom * .25},
+                       {20, 0}}) {
+        auto bytes = floatData(field.second);
+        std::copy(bytes.begin(), bytes.end(), b.begin() + field.first);
+    }
+    try {
+        writeBootRecord(b);
+    } catch (...) {
+        try {
+            writeBootRecord(original);
+        } catch (...) {
+        }
+        throw;
+    }
+}
+void Camera::activateBootPosition() {
+    wake(true);
+    request(0x3904, true);
+}
+std::string Camera::bootDiagnostics() {
+    auto b = bootRecord();
+    std::ostringstream out;
+    for (int offset : {4, 8, 12, 16, 20}) {
+        float v;
+        std::memcpy(&v, b.data() + offset, 4);
+        out << v << " ";
+    }
+    return out.str() + "\n";
+}
 std::vector<SettingValue> Camera::snapshotSettings() {
     std::vector<SettingValue> out;
     for (auto &s : settings())
@@ -436,6 +561,10 @@ std::vector<SettingValue> Camera::snapshotSettings() {
     return out;
 }
 void Camera::applySetting(const SettingValue &v) {
+    if (v.key == "backlight") {
+        applySetting({"exposure_compensation", v.value - 9, v.automatic});
+        return;
+    }
     auto &d = find(v.key);
     if (v.automatic && d.backend != Backend::Camera && d.backend != Backend::Image)
         throw std::runtime_error("Automatic mode is not available for this setting");
@@ -451,12 +580,14 @@ void Camera::applySetting(const SettingValue &v) {
                             : E_NOINTERFACE);
         if (FAILED(hr) || !(flags & (v.automatic ? 1 : 2)))
             throw std::runtime_error("Requested manual/automatic mode is unsupported");
-        if (!v.automatic && (v.value < lo || v.value > hi || std::floor(v.value) != v.value ||
-                             ((long)v.value - lo) % std::max(1L, step) != 0))
+        double driverValue = v.value + (v.key == "exposure_compensation" ? 9 : 0);
+        if (!v.automatic &&
+            (driverValue < lo || driverValue > hi || std::floor(driverValue) != driverValue ||
+             ((long)driverValue - lo) % std::max(1L, step) != 0))
             throw std::runtime_error("Setting is outside the driver range/step");
         hr = d.backend == Backend::Camera
-                 ? control_->Set(d.property, (long)v.value, v.automatic ? 1 : 2)
-                 : procamp_->Set(d.property, (long)v.value, v.automatic ? 1 : 2);
+                 ? control_->Set(d.property, (long)driverValue, v.automatic ? 1 : 2)
+                 : procamp_->Set(d.property, (long)driverValue, v.automatic ? 1 : 2);
         if (FAILED(hr))
             throw std::runtime_error("Camera rejected image setting");
     } else {

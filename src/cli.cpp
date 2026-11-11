@@ -77,6 +77,82 @@ void hardwareTest(Camera &c) {
         throw;
     }
 }
+void imageControlsTest(Camera &c) {
+    bool asleep = c.sleeping();
+    c.wake(true);
+    auto all = c.settings();
+    auto s = std::find_if(all.begin(), all.end(),
+                          [](auto &s) { return s.current.key == "exposure_compensation"; });
+    if (s == all.end() || !s->readable || !s->defaultAvailable || s->minimum != -9 ||
+        s->maximum != 9 || s->defaultValue.value != 0)
+        throw std::runtime_error("Exposure compensation metadata is incorrect");
+    auto original = s->current;
+    auto restore = [&] {
+        c.applySetting(original);
+        if (asleep)
+            c.wake(false);
+    };
+    try {
+        for (double value : {-9., 9., 0.}) {
+            c.applySetting({"exposure_compensation", value, false});
+            std::cout << "PASS exposure_compensation=" << value << " (verified readback)\n";
+        }
+        c.applySetting(s->defaultValue);
+        restore();
+        std::cout << "PASS: image compensation range, neutral default, repeated writes, original "
+                     "value restored\n";
+    } catch (...) {
+        try {
+            restore();
+        } catch (...) {
+        }
+        throw;
+    }
+}
+void bootTest(Camera &c) {
+    bool asleep = c.sleeping();
+    c.wake(true);
+    auto id = c.id();
+    auto position = c.read();
+    auto all = c.settings();
+    auto ai =
+        std::find_if(all.begin(), all.end(), [](auto &s) { return s.current.key == "ai_mode"; });
+    if (ai == all.end() || !ai->readable)
+        throw std::runtime_error("Tracking state unavailable");
+    auto mode = ai->current;
+    auto original = c.bootRecord();
+    auto restore = [&] {
+        c.writeBootRecord(original);
+        c.move(position);
+        c.applySetting(mode);
+        if (asleep)
+            c.wake(false);
+    };
+    try {
+        c.applySetting({"ai_mode", 0, false});
+        Preset target{L"Boot test", id, {5, 5, 1}, {}};
+        c.setBootPreset(target);
+        auto saved = c.bootRecord();
+        c.disconnect();
+        c.connect(id);
+        if (c.bootRecord() != saved)
+            throw std::runtime_error("Boot record did not survive reconnect");
+        c.activateBootPosition();
+        settle();
+        print(c.read());
+        expect(c, target.position, "Firmware boot-position recall");
+        restore();
+        std::cout << "PASS: device boot position write, reconnect persistence, firmware recall, "
+                     "original boot and camera state restored\n";
+    } catch (...) {
+        try {
+            restore();
+        } catch (const std::exception &e) {
+            std::cerr << "Restore error: " << e.what() << "\n";
+        }
+        throw;
+    }
+}
 void settingsTest(Camera &c) {
     bool asleep = c.sleeping();
     c.wake(true);
@@ -210,19 +286,23 @@ int wmain(int argc, wchar_t **argv) {
                    L"[--device ID]\n  ptzctl diagnostics [--device ID]\n  ptzctl hardware-test "
                    L"[--device ID] (moves PTZ, tests four presets, restores)\n  ptzctl settings\n  "
                    L"ptzctl set KEY VALUE [--auto]\n  ptzctl settings-test (changes settings "
-                   L"temporarily, then restores)\n";
+                   L"temporarily, then restores)\n  ptzctl image-defaults\n  ptzctl "
+                   L"image-controls-test\n  ptzctl boot-read\n  ptzctl set-boot NAME\n  ptzctl "
+                   L"boot-test (temporarily changes boot configuration and PTZ, then restores)\n";
         } else if (cmd == L"devices") {
             for (auto &d : devices())
                 std::wcout << d.name << L"\n" << d.id << L"\n";
         } else {
             if (cmd != L"read" && cmd != L"wake" && cmd != L"sleep" && cmd != L"save" &&
                 cmd != L"recall" && cmd != L"diagnostics" && cmd != L"hardware-test" &&
-                cmd != L"settings" && cmd != L"set" && cmd != L"settings-test")
+                cmd != L"settings" && cmd != L"set" && cmd != L"settings-test" &&
+                cmd != L"boot-read" && cmd != L"image-defaults" && cmd != L"boot-test" &&
+                cmd != L"set-boot" && cmd != L"image-controls-test")
                 throw std::runtime_error("Unknown command; use --help");
             std::wstring id, name;
             SettingValue setting;
             int option = 2;
-            if (cmd == L"save" || cmd == L"recall") {
+            if (cmd == L"save" || cmd == L"recall" || cmd == L"set-boot") {
                 if (argc < 3)
                     throw std::runtime_error("Supply a preset name");
                 name = argv[2];
@@ -258,13 +338,27 @@ int wmain(int argc, wchar_t **argv) {
                     "Tiny SE not found. Use devices, then --device with its exact ID.");
             Camera c;
             c.connect(id);
-            if (cmd == L"settings") {
+            if (cmd == L"image-controls-test") {
+                imageControlsTest(c);
+            } else if (cmd == L"boot-test") {
+                bootTest(c);
+            } else if (cmd == L"boot-read") {
+                c.wake(true);
+                print(c.read());
+                std::cout << c.bootDiagnostics();
+            } else if (cmd == L"image-defaults") {
+                c.restoreImageDefaults();
+                std::cout << "Image defaults restored and verified\n";
+            } else if (cmd == L"settings") {
                 c.wake(true);
                 for (auto &s : c.settings())
                     std::cout << s.current.key << "="
                               << (s.readable ? std::to_string(s.current.value) : "unreadable")
                               << " auto=" << s.current.automatic << " writable=" << s.writable
-                              << " range=" << s.minimum << ".." << s.maximum << " | "
+                              << " range=" << s.minimum << ".." << s.maximum << " default="
+                              << (s.defaultAvailable ? std::to_string(s.defaultValue.value)
+                                                     : "unavailable")
+                              << " defaultAuto=" << s.defaultValue.automatic << " | "
                               << utf8(s.details) << "\n";
             } else if (cmd == L"set") {
                 c.applySetting(setting);
@@ -285,7 +379,12 @@ int wmain(int argc, wchar_t **argv) {
                 s.load();
                 auto p = std::find_if(s.items.begin(), s.items.end(),
                                       [&](auto &p) { return p.name == name && p.device == id; });
-                if (cmd == L"recall") {
+                if (cmd == L"set-boot") {
+                    if (p == s.items.end())
+                        throw std::runtime_error("Preset not found for this camera");
+                    c.setBootPreset(*p);
+                    std::cout << "PTZ boot position stored and read back from camera\n";
+                } else if (cmd == L"recall") {
                     if (p == s.items.end())
                         throw std::runtime_error("Preset not found for this camera");
                     c.recall(*p);

@@ -28,7 +28,8 @@ struct SettingValue {
     bool automatic = false;
 };
 struct Setting {
-    SettingValue current;
+    SettingValue current, defaultValue;
+    bool defaultAvailable = false;
     std::wstring name, group, details;
     double minimum = 0, maximum = 1, step = 1;
     bool readable = false, writable = false, autoSupported = false;
@@ -83,6 +84,12 @@ class Camera {
     std::vector<SettingValue> snapshotSettings();
     void applySetting(const SettingValue &value);
     void recall(const Preset &preset);
+    void restoreImageDefaults();
+    std::vector<unsigned char> bootRecord();
+    void writeBootRecord(const std::vector<unsigned char> &record);
+    void setBootPreset(const Preset &preset);
+    void activateBootPosition();
+    std::string bootDiagnostics();
     void preview(HWND owner, int width, int height);
     void resizePreview(int width, int height);
     void stopPreview();

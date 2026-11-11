@@ -13,7 +13,7 @@ Firmware-dependent modes may be rejected even when their enum is listed.
 | --- | --- |
 | Tracking | Off/group/human/hand modes; firmware-dependent whiteboard/desk modes; normal, upper-body, close-up, headless and lower-body framing; standard/headroom/motion style; left/right hand selection |
 | Tracking configuration | Tracking/zoom/dynamic-zoom/reverse-zoom gestures; gesture zoom factor; reversed gimbal direction; composition X/Y; zone enable and automatic target selection; four zone boundaries; zone home pan/pitch/zoom; four hand-tracking boundaries |
-| Image | Brightness, contrast, hue, saturation, sharpness, white balance, backlight compensation, gain, focus, exposure; automatic white balance/focus/exposure where supported; HDR, face-priority exposure/focus, anti-flicker, field of view and mirror |
+| Image | Brightness, contrast, hue, saturation, sharpness, white balance, exposure compensation (-9..9, neutral 0), gain, focus, exposure; automatic white balance/focus/exposure where supported; HDR, face-priority exposure/focus, anti-flicker, field of view and mirror |
 | Device | Microphone noise reduction, microphone during sleep, automatic microphone gain, reception distance, auto-sleep timeout, startup tracking/framing, existing sleep-background slot and background mirror |
 | Set-only requests | Image style (standard/text/landscape/portrait/nightscape/film) and AI automatic zoom; current values cannot be read back on this implementation |
 | Status | LED brightness is read-only; gamma is shown unavailable on the tested driver |
@@ -72,3 +72,39 @@ per the request to work through application code. Hardware tests use the same
 backend through the CLI and verify configuration changes, restoration, and
 disk-backed preset recall. They do not assess visual tracking quality. The OBS
 module remains an unbuilt integration scaffold; see OBS-PLUGIN.md.
+
+## Image defaults (v0.3)
+
+**Default selected** restores the selected Image control; **Restore image
+defaults** restores all available image defaults. Standard controls use the
+Windows driver's reported default values, with automatic mode for supported
+white balance, exposure, and focus. Exposure Compensation is displayed as
+-9..9 and resets to 0 (driver value 9). Older `backlight` preset values in
+0..18 are translated to the new `exposure_compensation` key when loading.
+
+Vendor controls use this explicit standard reset profile: HDR off, anti-flicker
+50 Hz, face-priority exposure/focus on, wide field of view, mirror off, standard
+image style. Unsupported controls are skipped. Image style remains a set-only
+request. This is an image reset, not a device factory reset; it leaves tracking,
+microphone, and stored boot configuration alone. Gain resets while exposure is
+briefly manual, then exposure returns to its default automatic mode.
+
+The Settings editor preserves the selected row across Apply and camera refresh,
+so repeated numeric/dropdown edits remain available. A hidden native-control
+regression test checks this without opening or controlling a desktop window.
+
+## Device boot preset (v0.3)
+
+Select a library preset and choose **Set as boot position**. Its PTZ values are
+stored in the camera, with readback verification. No Windows startup task or
+background app is used. The camera retains one boot position; subsequent
+changes to the local preset do not automatically update it. Other settings in
+the preset are not copied into boot state. Device / Startup tracking mode can
+still enable tracking after startup, which may move the camera away afterward.
+
+The Tiny SE 0..12 driver zoom range is converted to the device's 1..4 zoom ratio,
+and driver tilt is converted to the device's positive-down pitch. Other driver
+zoom layouts are rejected. Hardware tests verified storing a pose, retaining it
+after reconnecting, and firmware recall at pan 5 / tilt 5 / zoom 1, then restored
+the original boot record and current camera state. Actual USB power cycling
+has not been tested.

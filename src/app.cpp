@@ -39,7 +39,8 @@ enum {
     Zoom,
     List,
     SettingsButton,
-    IncludeSettings
+    IncludeSettings,
+    SetBoot
 };
 HINSTANCE instance;
 HWND mainWindow, deviceBox, status, previewHost, list, searchBox, nameBox, panBox, tiltBox, zoomBox;
@@ -332,7 +333,11 @@ void command(int id) {
     if (index < 0)
         throw std::runtime_error("Select a preset first.");
     auto p = store.items[index];
-    if (id == Recall) {
+    if (id == SetBoot) {
+        camera.setBootPreset(p);
+        message(L"Stored PTZ from \"" + p.name +
+                L"\" in the camera as its boot position. No app is needed at startup.");
+    } else if (id == Recall) {
         if (camera.id() != p.device)
             throw std::runtime_error("Connect the camera associated with this preset.");
         camera.recall(p);
@@ -426,6 +431,7 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             button(L"Update selected", Update, 668, 773, 154);
             button(L"Rename", Rename, 24, 819, 100);
             button(L"Delete", Remove, 136, 819, 100);
+            button(L"Set as boot position", SetBoot, 248, 819, 210);
             button(L"Import...", Import, 574, 819, 118);
             button(L"Export...", Export, 704, 819, 118);
             status = ctl(L"STATIC", L"", 0, 24, 875, 798, 64);
@@ -455,7 +461,7 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
                 return 0;
             }
             if (HIWORD(wp) == BN_CLICKED &&
-                (id >= Refresh && id <= Sleep || id == SettingsButton)) {
+                (id >= Refresh && id <= Sleep || id == SettingsButton || id == SetBoot)) {
                 command(id);
                 return 0;
             }

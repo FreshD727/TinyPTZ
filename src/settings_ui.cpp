@@ -8,8 +8,10 @@ namespace ptz {
 namespace {
 struct Editor {
     Camera *camera;
-    HWND owner, window, category, list, value, choices, automatic, range, details, apply;
+    HWND owner, window, category, list, value, choices, automatic, range, details, apply, defaults,
+        selectedDefault;
     HFONT font;
+    bool refreshing = false;
     std::vector<Setting> settings;
     std::vector<size_t> rows;
 };
@@ -31,6 +33,7 @@ Setting *selected(Editor &e) {
     return row >= 0 && row < (int)e.rows.size() ? &e.settings[e.rows[row]] : nullptr;
 }
 void fill(Editor &e) {
+    e.refreshing = true;
     ListView_DeleteAllItems(e.list);
     e.rows.clear();
     int group = (int)SendMessageW(e.category, CB_GETCURSEL, 0, 0);
@@ -59,15 +62,35 @@ void fill(Editor &e) {
         ListView_SetItemText(e.list, row, 2, s.details.data());
     }
     EnableWindow(e.apply, FALSE);
+    EnableWindow(e.selectedDefault, FALSE);
+    EnableWindow(e.defaults, group == 1);
+    e.refreshing = false;
+}
+void showSelection(Editor &e);
+void refreshSettings(Editor &e, std::vector<Setting> settings) {
+    auto *old = selected(e);
+    std::string key = old ? old->current.key : "";
+    e.settings = std::move(settings);
+    fill(e);
+    for (size_t row = 0; row < e.rows.size(); ++row)
+        if (e.settings[e.rows[row]].current.key == key) {
+            ListView_SetItemState(e.list, (int)row, LVIS_SELECTED | LVIS_FOCUSED,
+                                  LVIS_SELECTED | LVIS_FOCUSED);
+            ListView_EnsureVisible(e.list, (int)row, FALSE);
+            showSelection(e);
+            break;
+        }
 }
 void load(Editor &e) {
-    e.settings = e.camera->settings();
-    fill(e);
+    refreshSettings(e, e.camera->settings());
 }
 void showSelection(Editor &e) {
     auto *s = selected(e);
-    if (!s)
+    if (!s) {
+        EnableWindow(e.apply, FALSE);
+        EnableWindow(e.selectedDefault, FALSE);
         return;
+    }
     SetWindowTextW(e.value, format(s->current.value).c_str());
     SendMessageW(e.choices, CB_RESETCONTENT, 0, 0);
     int current = 0;
@@ -80,13 +103,19 @@ void showSelection(Editor &e) {
     ShowWindow(e.choices, s->choices.empty() ? SW_HIDE : SW_SHOW);
     ShowWindow(e.value, s->choices.empty() ? SW_SHOW : SW_HIDE);
     SendMessageW(e.automatic, BM_SETCHECK, s->current.automatic ? BST_CHECKED : BST_UNCHECKED, 0);
-    EnableWindow(e.automatic, s->autoSupported);
+    EnableWindow(e.automatic, s->autoSupported && s->writable);
     EnableWindow(e.value, s->writable);
     EnableWindow(e.choices, s->writable);
     EnableWindow(e.apply, s->writable);
-    SetWindowTextW(e.range, (L"Range: " + format(s->minimum) + L" to " + format(s->maximum) +
-                             L"   Step: " + format(s->step))
-                                .c_str());
+    EnableWindow(e.selectedDefault, s->writable && s->group == L"Image" && s->defaultAvailable);
+    SetWindowTextW(e.range,
+                   (L"Range: " + format(s->minimum) + L" to " + format(s->maximum) + L"   Step: " +
+                    format(s->step) +
+                    (s->defaultAvailable ? L"   Default: " + (s->defaultValue.automatic
+                                                                  ? std::wstring(L"Auto")
+                                                                  : format(s->defaultValue.value))
+                                         : L""))
+                       .c_str());
     SetWindowTextW(e.details, (s->name + L"\n" + s->details).c_str());
 }
 LRESULT CALLBACK procedure(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
@@ -128,6 +157,10 @@ LRESULT CALLBACK procedure(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             e->range = control(*e, L"STATIC", L"", 0, 20, 575, 740, 25);
             e->apply =
                 control(*e, L"BUTTON", L"Apply selected setting", 7, 20, 615, 220, 36, WS_TABSTOP);
+            e->defaults =
+                control(*e, L"BUTTON", L"Restore image defaults", 9, 255, 615, 220, 36, WS_TABSTOP);
+            e->selectedDefault =
+                control(*e, L"BUTTON", L"Default selected", 10, 485, 615, 135, 36, WS_TABSTOP);
             control(*e, L"BUTTON", L"Close", 8, 630, 615, 130, 36, WS_TABSTOP);
             control(*e, L"STATIC",
                     L"Preset saving captures readable settings. Set-only values are included after "
@@ -147,6 +180,20 @@ LRESULT CALLBACK procedure(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             }
             if (id == 2) {
                 load(*e);
+                return 0;
+            }
+            if (id == 10) {
+                auto *s = selected(*e);
+                if (s && s->writable && s->defaultAvailable) {
+                    e->camera->applySetting(s->defaultValue);
+                    load(*e);
+                }
+                return 0;
+            }
+            if (id == 9) {
+                e->camera->restoreImageDefaults();
+                load(*e);
+                SetWindowTextW(e->details, L"Supported image settings restored to defaults.");
                 return 0;
             }
             if (id == 8) {
@@ -192,7 +239,8 @@ LRESULT CALLBACK procedure(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
         }
         if (msg == WM_NOTIFY && ((NMHDR *)lp)->idFrom == 3 &&
             ((NMHDR *)lp)->code == LVN_ITEMCHANGED) {
-            showSelection(*e);
+            if (!e->refreshing && (((NMLISTVIEW *)lp)->uChanged & LVIF_STATE))
+                showSelection(*e);
             return 0;
         }
         if (msg == WM_CLOSE) {
