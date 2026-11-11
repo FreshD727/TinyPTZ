@@ -258,9 +258,9 @@ void command(int id) {
         return;
     }
     if (id == Wake || id == Sleep) {
-        camera.wake(id == Wake);
-        message(id == Wake ? L"Wake sent. Allow the gimbal to settle, then read position."
-                           : L"Camera sleep sent.");
+        camera.wake(id == Wake, true);
+        message(id == Wake ? L"Camera run command completed. Live video should resume."
+                           : L"Camera sleep state confirmed.");
         return;
     }
     if (id == Read) {
@@ -384,7 +384,7 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             button(L"Refresh", Refresh, 606, 102, 90);
             button(L"Connect", Connect, 706, 102, 120);
             previewHost = ctl(L"STATIC",
-                              L"Preview is off\n\nCamera control works without preview.\nLeave "
+                              L"Preview is off\n\nStart preview when using Tiny PTZ alone.\nLeave "
                               L"preview off when OBS uses the camera.",
                               0, 24, 158, 520, 290, SS_CENTER | SS_CENTERIMAGE | WS_CLIPCHILDREN);
             button(L"Start preview", Preview, 24, 461, 140);

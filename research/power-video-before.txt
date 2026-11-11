@@ -1,0 +1,7 @@
+baseline {"frames": 24, "mean": 115.175, "spatial_sd": 42.241, "temporal_mad": 0.358}
+Traceback (most recent call last):
+  File "C:\Users\Bruh\Desktop\obsbot rebuild\research\check-power-video.py", line 33, in <module>
+    command("sleep"); asleep,sm=sample()
+  File "C:\Users\Bruh\Desktop\obsbot rebuild\research\check-power-video.py", line 23, in sample
+    if len(batch)<5: raise RuntimeError("No current video frames; camera may be busy")
+RuntimeError: No current video frames; camera may be busy

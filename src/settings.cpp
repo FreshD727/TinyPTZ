@@ -1,4 +1,5 @@
 #include "core.hpp"
+#include "protocol.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -270,6 +271,12 @@ std::vector<unsigned char> Camera::request(unsigned short command, bool write,
         put(b, 12, (unsigned short)payload.size());
         std::copy(payload.begin(), payload.end(), b.begin() + 16);
         put(b, 14, crc(b.data() + 12, payload.size() + 4));
+    }
+    if (command == 0xa0c2 && write) {
+        if (payload.size() != 4 || payload[0] > 1 || payload[1] || payload[2] || payload[3])
+            throw std::runtime_error("Invalid power payload");
+        auto report = wakePacket(payload[0] == 0, sequence_);
+        std::copy(report.begin(), report.end(), b.begin());
     }
     extension(2, true, b);
     for (int attempt = 0; attempt < 12; ++attempt) {

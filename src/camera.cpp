@@ -97,23 +97,13 @@ void Camera::connect(const std::wstring &id) {
 }
 void Camera::disconnect() {
     stopPreview();
-    std::exception_ptr failure;
-    if (sleepGuard_) {
-        try {
-            holdAwake(false);
-        } catch (...) {
-            failure = std::current_exception();
-        }
-        sleepGuard_ = false;
-    }
+    awakeConfirmed_ = false;
     extension_.Reset();
     control_.Reset();
     procamp_.Reset();
     appliedSettings_.clear();
     filter_.Reset();
     id_.clear();
-    if (failure)
-        std::rethrow_exception(failure);
 }
 Range Camera::range(long property) const {
     Range r;
@@ -184,54 +174,32 @@ bool Camera::sleeping() {
         throw std::runtime_error("Incomplete OBSBOT status");
     return status[9] != 1;
 }
-void Camera::holdAwake(bool hold) {
-    discoverExtension();
-    KSP_NODE prop{};
-    prop.Property.Set = obsbotXu;
-    prop.Property.Id = 6;
-    prop.Property.Flags = KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_TOPOLOGY;
-    prop.NodeId = node_;
-    unsigned char data[60]{};
-    data[0] = 0x12;
-    data[1] = 1;
-    data[2] = hold ? 1 : 0;
-    ULONG bytes = 0;
-    check(extension_->KsProperty((PKSPROPERTY)&prop, sizeof(prop), data, 60, &bytes),
-          "Set no-stream sleep guard");
-    sleepGuard_ = hold;
-}
-void Camera::wake(bool awake) {
-    if (awake && !sleepGuard_)
-        holdAwake(true);
-    if (!awake && sleepGuard_)
-        holdAwake(false);
-    if (sleeping() == !awake) {
-        if (!awake && sleepGuard_)
-            holdAwake(false);
+void Camera::wake(bool awake, bool explicitRequest) {
+    // Never change the Meet-only no-stream-sleep policy on a Tiny SE.
+    auto before = extension(6, false);
+    bool send = needsPowerCommand(awake, before[9], awakeConfirmed_, explicitRequest);
+    if (!send)
         return;
-    }
-    // Recovered from libdev.dll's legacy encoder and cameraSetDevRunStatusR.
-    // Tiny SE requires legacy wake; V3 settings work after the device is awake.
-    auto frame = wakePacket(awake, ++sequence_);
-    KSP_NODE prop{};
-    prop.Property.Set = obsbotXu;
-    prop.Property.Id = 2;
-    prop.Property.Flags = KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_TOPOLOGY;
-    prop.NodeId = node_;
-    ULONG received = 0;
-    check(extension_->KsProperty((PKSPROPERTY)&prop, sizeof(prop), frame.data(), 60, &received),
-          "Send OBSBOT power command");
-    for (int attempt = 0; attempt < 30; ++attempt) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        if (sleeping() == !awake) {
-            if (awake)
-                std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-            else if (sleepGuard_)
-                holdAwake(false);
-            return;
+
+    auto waitForState = [&](int attempts) {
+        int stable = 0;
+        for (int i = 0; i < attempts; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            auto status = extension(6, false);
+            stable = status[9] == (awake ? 1 : 3) ? stable + 1 : 0;
+            if (stable >= 2)
+                return true;
         }
-    }
-    throw std::runtime_error("Camera did not confirm the requested sleep/wake state.");
+        return false;
+    };
+    // Always send an explicit Wake even when the gimbal already reports Run.
+    // The installed SDK identifies this Tiny SE as protocol version 3.
+    request(0xa0c2, true, {static_cast<unsigned char>(awake ? 0 : 1), 0, 0, 0});
+    if (!waitForState(50))
+        throw std::runtime_error("Camera did not confirm the requested sleep/wake state.");
+    awakeConfirmed_ = awake;
+    if (awake)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 }
 std::string Camera::diagnostics() {
     discoverExtension();

@@ -54,11 +54,10 @@ class Camera {
     ComPtr<IKsControl> extension_;
     ULONG node_ = 0;
     unsigned short sequence_ = 0;
-    bool sleepGuard_ = false;
+    bool awakeConfirmed_ = false;
     std::map<std::string, SettingValue> appliedSettings_;
     std::wstring id_;
     void discoverExtension();
-    void holdAwake(bool hold);
     std::vector<unsigned char> extension(ULONG selector, bool write,
                                          std::vector<unsigned char> data = {});
     std::vector<unsigned char> request(unsigned short command, bool write,
@@ -77,7 +76,7 @@ class Camera {
     Position read() const;
     void setAxis(long property, long value);
     void move(Position position);
-    void wake(bool awake);
+    void wake(bool awake, bool explicitRequest = false);
     bool sleeping();
     std::string diagnostics();
     std::vector<Setting> settings();

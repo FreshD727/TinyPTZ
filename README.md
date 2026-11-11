@@ -8,11 +8,11 @@ This independent app uses Windows camera interfaces directly; see the
 
 ## Run
 
-Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ-v0.3` after building).
+Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ-v0.3.1` after building).
 No installation, administrator access, Node,
 Python, .NET runtime or OBSBOT Center is needed to run the built app.
 The C++ runtime is statically linked; Windows supplies DirectShow.
-Move the entire TinyPTZ-v0.3 folder to any writable location (including USB storage).
+Move the entire TinyPTZ-v0.3.1 folder to any writable location (including USB storage).
 Presets are created in `data/presets.ptz` beside the executable.
 Do not run multiple writers (GUI, CLI or two copies) against the same data file.
 
@@ -50,12 +50,16 @@ setting another replaces it. Editing/deleting the local preset afterward does
 not change the stored boot position. A firmware recall and connection reopen
 were tested; a physical USB power cycle has not been tested.
 
-The **Wake** and **Sleep** buttons control the gimbal power state. The app holds
-a no-stream sleep guard while controlling the camera and releases it on Sleep
-or disconnect/exit. This prevents the camera from parking while preview is off.
-That guard is not readable in status; the app releases its guard on exit rather
-than claiming to restore a previously configured guard value. Normal exit is
-needed for cleanup.
+The **Wake** and **Sleep** buttons send the Tiny SE protocol-3 power command.
+Wake explicitly restores the camera's run state even if its gimbal already
+reports Running. Version 0.3.1 fixes the missing USB-report compatibility byte
+that could leave video on the sleep screen. The obsolete Meet-only no-stream
+sleep guard is no longer sent to the Tiny SE.
+
+Stable PTZ operation may require an active video stream, depending on firmware.
+Start this app's preview when using it alone; leave preview off when OBS or
+another application already captures the camera. Close older Tiny PTZ copies
+before using this build so they cannot send the old power commands.
 
 The camera reports its own limits; unsupported controls or failed writes produce
 errors. Position readback is what the Windows driver returns and may reflect a
@@ -98,8 +102,8 @@ power state. It uses a separate test file and leaves user presets untouched.
 `settings-test` temporarily changes supported settings, checks readback, exercises
 a full disk-backed settings preset, and restores the starting values. It does
 not use the user preset library. Run tests only when camera activity is acceptable.
-The CLI releases its sleep guard on exit; keep OBS or another video stream open
-if you want the camera to remain active after the CLI exits.
+Keep OBS or another video stream open if you want the camera to remain active
+after the CLI exits. The CLI does not override the camera's no-stream policy.
 
 `src/core.hpp`, `camera.cpp`, `settings.cpp`, and `presets.cpp` are the reusable C++17 core with
 no GUI dependency. `obs/plugin.cpp` is an optional libobs module that registers
@@ -116,7 +120,7 @@ Requires Windows, Visual Studio C++ Build Tools and Windows SDK. Run:
 
 This builds the native portable executables, runs core and hidden native-control
 regression tests, and creates
-`dist/TinyPTZ-v0.3-Windows-x64.zip`. CMake is also supported. No third-party binary
+`dist/TinyPTZ-v0.3.1-Windows-x64.zip`. CMake is also supported. No third-party binary
 from OBSBOT is bundled or loaded by the app. The development encoder probe
 loads the installed DLL only to generate reference packets.
 

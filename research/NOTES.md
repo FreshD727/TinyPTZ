@@ -1,3 +1,7 @@
+> Current power implementation: see the v0.3.1 correction at the end. Earlier
+> legacy-wake/no-stream-guard conclusions below are retained investigation history
+> and are superseded by the live-stream and installed-SDK evidence.
+
 # Camera settings and preset coverage
 
 Open **Settings...**, select Tracking, Image, or Device, select a row, edit its
@@ -141,3 +145,63 @@ recall with matching driver PTZ values. The original boot record, PTZ, AI mode,
 and sleep state were restored by the test. No physical power cycle was performed.
 The new UI stores only PTZ into boot state, not the preset's whole settings
 snapshot. It does not install a startup process or change startup tracking mode.
+
+## Sleep/wake correction (v0.3.1)
+
+The reported defect affected both Tiny PTZ and OBS. Gimbal state alone was not
+sufficient evidence that video resumed. An independent FFmpeg DirectShow stream
+was kept open throughout sleep/wake tests, with only in-memory frame statistics
+retained. Early tests reproduced Run status while capture stopped delivering
+frames. Tests do not save or display camera pictures.
+
+The original executable's imports and callsites were inspected with dumpbin.
+`cameraSetDisableSleepWithoutStreamU` is documented for Meet cameras; the main
+app gates it to product types 5, 6, 10 and 13, excluding Tiny SE (12). It has been
+removed from this controller. A separate, hash-checked installed-SDK probe read
+the actual connected camera's protocol field: version 3, USB transport 0.
+
+The native SDK passed three uninterrupted capture cycles. Development-only
+in-process instrumentation in `sdk-wire-probe.cpp` observed its encoder and
+IKsControl transfer. It did not attach to or automate a desktop application.
+Power uses XU selector 2, protocol-3 command A0C2, uint32 0=run / 1=sleep. The
+fixed 60-byte USB transfer also has byte 32 set to 1. Replaying only the logical
+20-byte frame with zero padding did not recover streaming. Including byte 32,
+with all incidental camera-specific padding removed, passed all three cycles.
+The exact firmware meaning of this compatibility byte is not established; it
+is retained based on observed interoperability, not a guessed field name.
+
+The final report builder has separate header and payload CRC-16/USB checksums,
+little-endian sequence, and the verified fixed-report byte. Unit tests compare
+power fixtures and reject omission of byte 32 or camera-ID padding. Explicit
+Wake is never skipped solely because the device already reports Run. Internal
+PTZ checks avoid repeatedly sending power commands after a confirmed session
+wake. Sleep completion requires state 3, not merely any non-Run state.
+
+`power-video-sdk-reference.txt` records the installed-SDK comparison.
+`power-video-marker.txt` records the minimal report experiment.
+`power-video-after.txt` records the final application-backend regression, with
+fresh packets continuing at about 30 fps and image differences from the sleep
+screen. No video source was reopened during the cycles. The test leaves the
+camera awake. Cold USB power cycling and testing every OBS capture mode are
+outside this regression. `check-power-video.py` is a development test requiring
+local FFmpeg, not a dependency of the portable application.
+
+The SDK wire observer is version-locked research code. Its compiled DLL and
+raw device-specific captures stay under ignored build/; neither the installed
+SDK nor its observer is loaded by the portable app. The incorrect four-byte
+payload in a legacy envelope was rejected by hardware and is not used. The
+old legacy encoder fixture remains historical research, not the production
+power implementation.
+
+Reproducing the optional development observer (never needed to build/run Tiny PTZ):
+
+```powershell
+. .\build.ps1
+& $compiler @common /LD research/sdk-wire-probe.cpp /Fobuild/sdk-wire-probe.obj /Febuild/sdk-wire-probe.dll build/ptz_core.lib ole32.lib oleaut32.lib strmiids.lib user32.lib
+@('sleep','wake','quit') | python research/probe-sdk-device.py --power-session --wire-probe
+```
+
+Only use this with the exact hash-checked installed SDK and this source layout.
+The simpler final regression uses `python research/check-power-video.py build/ptzctl.exe`.
+The production application has no dependency on either Python, FFmpeg, the
+observer, or the vendor SDK.

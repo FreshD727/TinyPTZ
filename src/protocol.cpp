@@ -1,27 +1,40 @@
 #include "protocol.hpp"
 namespace ptz {
+namespace {
+std::uint16_t crc(const unsigned char *data, size_t length) {
+    std::uint16_t value = 0xffff;
+    for (size_t i = 0; i < length; ++i) {
+        value ^= data[i];
+        for (int bit = 0; bit < 8; ++bit)
+            value = (value >> 1) ^ ((value & 1) ? 0xa001 : 0);
+    }
+    return value ^ 0xffff;
+}
+void word(std::array<unsigned char, 60> &b, size_t offset, std::uint16_t value) {
+    b[offset] = (unsigned char)value;
+    b[offset + 1] = (unsigned char)(value >> 8);
+}
+} // namespace
 std::array<unsigned char, 60> wakePacket(bool awake, std::uint16_t sequence) {
     std::array<unsigned char, 60> frame{};
     frame[0] = 0xaa;
-    frame[2] = 14;
-    frame[3] = 0x10;
-    frame[4] = (unsigned char)(sequence >> 8);
-    frame[5] = (unsigned char)sequence;
-    frame[9] = 0xe1;
-    frame[10] = 0x13;
-    frame[11] = 0xc2;
-    frame[12] = 1;
-    frame[13] = awake ? 1 : 3;
-    // CRC-16/USB across the 14-byte legacy message; token stored big-endian.
-    std::uint16_t crc = 0xffff;
-    for (int i = 0; i < 14; ++i) {
-        crc ^= frame[i];
-        for (int bit = 0; bit < 8; ++bit)
-            crc = (crc >> 1) ^ ((crc & 1) ? 0xa001 : 0);
-    }
-    crc ^= 0xffff;
-    frame[6] = (unsigned char)(crc >> 8);
-    frame[7] = (unsigned char)crc;
+    frame[1] = 0x25;
+    word(frame, 2, sequence);
+    word(frame, 4, 12);
+    frame[8] = 0x0a;
+    frame[9] = 2;
+    word(frame, 10, 0xa0c2);
+    word(frame, 6, crc(frame.data(), 12));
+    word(frame, 12, 4);
+    frame[16] = awake ? 0 : 1; // Protocol 3 uint32 sleep flag, not DevStatus enum.
+    word(frame, 14, crc(frame.data() + 12, 8));
+    // Required fixed-report compatibility byte observed in the vendor's USB
+    // transfer and verified independently of its incidental camera-ID padding.
+    frame[32] = 1;
     return frame;
+}
+bool needsPowerCommand(bool awake, unsigned char reportedState, bool sessionAwake,
+                       bool explicitRequest) {
+    return explicitRequest || reportedState != (awake ? 1 : 3) || (awake && !sessionAwake);
 }
 } // namespace ptz

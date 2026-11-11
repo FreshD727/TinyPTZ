@@ -288,7 +288,8 @@ int wmain(int argc, wchar_t **argv) {
                    L"ptzctl set KEY VALUE [--auto]\n  ptzctl settings-test (changes settings "
                    L"temporarily, then restores)\n  ptzctl image-defaults\n  ptzctl "
                    L"image-controls-test\n  ptzctl boot-read\n  ptzctl set-boot NAME\n  ptzctl "
-                   L"boot-test (temporarily changes boot configuration and PTZ, then restores)\n";
+                   L"boot-test (temporarily changes boot configuration and PTZ, then restores)\n  "
+                   L"ptzctl power-session (stdin: wake / sleep / diagnostics / quit)\n";
         } else if (cmd == L"devices") {
             for (auto &d : devices())
                 std::wcout << d.name << L"\n" << d.id << L"\n";
@@ -297,7 +298,7 @@ int wmain(int argc, wchar_t **argv) {
                 cmd != L"recall" && cmd != L"diagnostics" && cmd != L"hardware-test" &&
                 cmd != L"settings" && cmd != L"set" && cmd != L"settings-test" &&
                 cmd != L"boot-read" && cmd != L"image-defaults" && cmd != L"boot-test" &&
-                cmd != L"set-boot" && cmd != L"image-controls-test")
+                cmd != L"set-boot" && cmd != L"image-controls-test" && cmd != L"power-session")
                 throw std::runtime_error("Unknown command; use --help");
             std::wstring id, name;
             SettingValue setting;
@@ -338,7 +339,23 @@ int wmain(int argc, wchar_t **argv) {
                     "Tiny SE not found. Use devices, then --device with its exact ID.");
             Camera c;
             c.connect(id);
-            if (cmd == L"image-controls-test") {
+            if (cmd == L"power-session") {
+                std::string action;
+                std::cout << "READY\n";
+                while (std::getline(std::cin, action) && action != "quit") {
+                    try {
+                        if (action == "wake" || action == "sleep")
+                            c.wake(action == "wake", true);
+                        else if (action == "diagnostics")
+                            std::cout << c.diagnostics();
+                        else
+                            throw std::runtime_error("Unknown power-session command");
+                        std::cout << "OK\n";
+                    } catch (const std::exception &e) {
+                        std::cout << "ERROR " << e.what() << "\n";
+                    }
+                }
+            } else if (cmd == L"image-controls-test") {
                 imageControlsTest(c);
             } else if (cmd == L"boot-test") {
                 bootTest(c);
@@ -372,7 +389,7 @@ int wmain(int argc, wchar_t **argv) {
             else if (cmd == L"settings-test")
                 settingsTest(c);
             else if (cmd == L"wake" || cmd == L"sleep") {
-                c.wake(cmd == L"wake");
+                c.wake(cmd == L"wake", true);
                 std::cout << "Power state verified\n";
             } else {
                 PresetStore s(portableData());

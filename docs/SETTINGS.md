@@ -108,3 +108,16 @@ zoom layouts are rejected. Hardware tests verified storing a pose, retaining it
 after reconnecting, and firmware recall at pan 5 / tilt 5 / zoom 1, then restored
 the original boot record and current camera state. Actual USB power cycling
 has not been tested.
+
+## Sleep and wake (v0.3.1)
+
+Wake now uses the Tiny SE's verified protocol-3 USB report, including its
+fixed-report compatibility byte. It sends a real Wake request even when the
+gimbal reports Running. The Meet-only no-stream guard has been removed.
+Independent capture tests kept a stream open through three sleep/wake cycles
+and verified fresh live frames after each Wake. Close older Tiny PTZ copies
+before running this version; no OBS source restart was used in the test.
+
+Firmware can park the gimbal when no video is being captured. Use Tiny PTZ
+preview when working alone, or keep the OBS camera source active while using
+controls without preview.

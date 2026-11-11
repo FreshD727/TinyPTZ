@@ -9,17 +9,30 @@ void require(bool condition, const char *message) {
 }
 int main() {
     try {
-        // Golden packet produced by libdev.dll SHA-256 e23a445b...bc994 at RVA EE320/EDCB0.
+        // SDK-observed protocol-3 prefix plus the verified fixed-report byte 32.
         auto packet = wakePacket(true, 1);
-        unsigned char golden[] = {0xaa, 0x00, 0x0e, 0x10, 0x00, 0x01, 0xed,
-                                  0x97, 0x00, 0xe1, 0x13, 0xc2, 0x01, 0x01};
+        unsigned char golden[] = {0xaa, 0x25, 1, 0, 12,   0, 0x18, 0xb8, 0x0a, 2,
+                                  0xc2, 0xa0, 4, 0, 0xbe, 7, 0,    0,    0,    0};
         require(std::equal(std::begin(golden), std::end(golden), packet.begin()),
-                "wake packet differs from original encoder");
-        require(std::all_of(packet.begin() + 14, packet.end(), [](auto b) { return b == 0; }),
-                "packet padding must be zero");
-        auto sleep = wakePacket(false, 0x1234);
-        require(sleep[4] == 0x12 && sleep[5] == 0x34 && sleep[13] == 3,
-                "sleep and sequence encoding");
+                "protocol-3 run packet fixture");
+        require(packet[32] == 1, "video wake report suffix must be present");
+        for (size_t i = 20; i < packet.size(); ++i)
+            require(packet[i] == (i == 32 ? 1 : 0),
+                    "power report must not contain a hardcoded device ID");
+        auto sleep = wakePacket(false, 1);
+        require(sleep[14] == 0xbf && sleep[15] == 0xfb && sleep[16] == 1 && sleep[17] == 0 &&
+                    sleep[18] == 0 && sleep[19] == 0 && sleep[32] == 1,
+                "protocol-3 sleep payload and checksum");
+        auto sequence = wakePacket(false, 0x1234);
+        require(sequence[2] == 0x34 && sequence[3] == 0x12, "protocol-3 sequence encoding");
+        require(needsPowerCommand(true, 1, true, true),
+                "explicit wake must repair video even when gimbal reports running");
+        require(needsPowerCommand(true, 1, false, false),
+                "first wake in a control session must send a power command");
+        require(needsPowerCommand(true, 3, true, false), "sleeping camera needs full wake");
+        require(!needsPowerCommand(true, 1, true, false),
+                "ordinary PTZ checks should not resend power commands");
+        require(needsPowerCommand(false, 4, false, false), "privacy is not confirmed sleep");
         auto path = std::filesystem::current_path() / L"build" /
                     (L"tiny-ptz-test-" + std::to_wstring(GetCurrentProcessId()) + L".ptz");
         PresetStore s(path);
@@ -107,7 +120,8 @@ int main() {
         auto tmp = path;
         tmp += L".tmp";
         std::filesystem::remove(tmp);
-        std::cout << "PASS: original-encoder packet fixture, 1000 presets, v1 migration/backup, "
+        std::cout << "PASS: protocol-3 power packet fixtures and wake recovery, 1000 presets, v1 "
+                     "migration/backup, "
                      "setting values/auto modes, Unicode, PTZ values, "
                      "quantization, corrupt-file rejection, atomic-save preservation\n";
         return 0;
