@@ -205,3 +205,28 @@ Only use this with the exact hash-checked installed SDK and this source layout.
 The simpler final regression uses `python research/check-power-video.py build/ptzctl.exe`.
 The production application has no dependency on either Python, FFmpeg, the
 observer, or the vendor SDK.
+
+## Native position readback (v0.3.2)
+
+The reported preset 17/-4/0 reproduced driver readback 17/-3/0. Native gimbal
+telemetry (V3 command 6604, original aiGetGimbalStateR RVA 162D0) showed motor
+pan 16.9 and motor pitch +4.0, i.e. user tilt -4.0. The SDK conversion helper at
+RVA 161C0 decodes nine signed little-endian int16 angle/speed fields scaled by
+0.1. For this Tiny SE the response is 24 bytes (18 angle/speed bytes plus extra
+status). Motor roll/pitch/yaw are at offsets 6/8/10; the first three fields are
+Euler orientation and must not be mistaken for the motor coordinates.
+
+Read position now rounds measured motor yaw and negative motor pitch to the
+nearest whole degree, with symmetric negative handling. It does not echo a
+cached command or add an extra degree of movement. Zoom still uses the driver.
+Unsupported telemetry layouts are rejected. Sleeping-camera parked readback
+continues to use the driver because native telemetry is not available asleep.
+
+Recall replaces a fixed one-second wait with three consecutive matching native
+position readings (bounded by 60 polls) before restoring saved AI tracking.
+`position-precision-validation.txt` records three disk-backed recalls of the
+reported pose from different directions, plus a positive-tilt case. All rounded
+readbacks matched exactly; native tilt ranged -3.9..-4.1, while the driver kept
+reporting -3. The test restored the original rounded pose, tracking mode and
+sleep state. This demonstrates numeric/readback consistency and sub-degree
+servo variation, not an independent optical measurement of camera direction.

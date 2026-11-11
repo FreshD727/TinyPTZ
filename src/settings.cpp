@@ -453,6 +453,20 @@ std::vector<Setting> Camera::settings() {
     }
     return result;
 }
+std::string Camera::positionDiagnostics() {
+    wake(true);
+    auto b = request(0x6604, false);
+    auto angles = decodeMotorAngles(b);
+    long pan = 0, tilt = 0, flags = 0;
+    control_->Get(CameraControl_Pan, &pan, &flags);
+    control_->Get(CameraControl_Tilt, &tilt, &flags);
+    auto p = read();
+    std::ostringstream out;
+    out << "driver " << pan << " " << tilt << " " << p.zoom << "\n";
+    out << "native motor " << angles.pan << " " << angles.tilt << "\n";
+    out << "display " << p.pan << " " << p.tilt << " " << p.zoom << "\n";
+    return out.str();
+}
 void Camera::restoreImageDefaults() {
     wake(true);
     auto all = settings();
@@ -755,7 +769,8 @@ void Camera::recall(const Preset &p) {
         if (controlsTracking)
             apply({"ai_mode", 0, false});
         move(p.position);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        if (controlsTracking || ai == original.end() || ai->current.value == 0)
+            waitForPosition(p.position);
         // A style can reset individual image controls, so apply it before refreshing readback.
         for (auto &v : p.settings)
             if ((v.key == "image_style" || v.key == "hdr") && !same(v)) {

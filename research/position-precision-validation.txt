@@ -1,0 +1,17 @@
+driver 17 -3 0
+native motor 16.9 -4.1
+display 17 -4 0
+Disk preset recall: target=17,-4,0 actual=17,-4,0
+driver 17 -3 0
+native motor 17 -4
+display 17 -4 0
+Disk preset recall: target=17,-4,0 actual=17,-4,0
+driver 17 -3 0
+native motor 17 -3.9
+display 17 -4 0
+Disk preset recall: target=17,-4,0 actual=17,-4,0
+driver 17 4 0
+native motor 17 4
+display 17 4 0
+Positive tilt: target=17,4,0 actual=17,4,0
+PASS: exact 17/-4/0 disk-backed recall from three directions, positive tilt, measured native angles and original state restored

@@ -9,6 +9,30 @@ void require(bool condition, const char *message) {
 }
 int main() {
     try {
+        // Actual Tiny SE telemetry: Euler angles differ from motor coordinates.
+        std::vector<unsigned char> pose{43,  0,   209, 0, 124, 0,   0,   0,   40, 0, 169, 0,
+                                        255, 255, 3,   0, 254, 255, 128, 180, 84, 0, 0,   0};
+        auto angles = decodeMotorAngles(pose);
+        require(angles.pan == 16.9 && angles.tilt == -4.0, "native motor fields and pitch sign");
+        require(roundedAngle(angles.pan) == 17 && roundedAngle(angles.tilt) == -4,
+                "17/-4 native readback");
+        require(roundedAngle(-3.9) == -4 && roundedAngle(3.9) == 4 && roundedAngle(-.5) == -1,
+                "symmetric measured-angle rounding");
+        pose[8] = 217;
+        pose[9] = 255;
+        pose[10] = 87;
+        pose[11] = 255;
+        angles = decodeMotorAngles(pose);
+        require(angles.pan == -16.9 && angles.tilt == 3.9 && roundedAngle(angles.pan) == -17 &&
+                    roundedAngle(angles.tilt) == 4,
+                "signed motor decoding and positive tilt");
+        bool rejected = false;
+        try {
+            decodeMotorAngles({0, 0});
+        } catch (...) {
+            rejected = true;
+        }
+        require(rejected, "reject truncated gimbal telemetry");
         // SDK-observed protocol-3 prefix plus the verified fixed-report byte 32.
         auto packet = wakePacket(true, 1);
         unsigned char golden[] = {0xaa, 0x25, 1, 0, 12,   0, 0x18, 0xb8, 0x0a, 2,

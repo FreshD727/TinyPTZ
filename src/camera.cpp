@@ -116,15 +116,39 @@ Range Camera::range(long property) const {
     }
     return r;
 }
-Position Camera::read() const {
+Position Camera::read() {
     if (!control_)
         throw std::runtime_error("Connect a camera first.");
     Position p;
     long flags;
-    check(control_->Get(CameraControl_Pan, &p.pan, &flags), "Read pan");
-    check(control_->Get(CameraControl_Tilt, &p.tilt, &flags), "Read tilt");
+    auto status = extension(6, false);
+    if (status[9] == 1) {
+        auto angles = decodeMotorAngles(request(0x6604, false));
+        p.pan = roundedAngle(angles.pan);
+        p.tilt = roundedAngle(angles.tilt);
+    } else {
+        check(control_->Get(CameraControl_Pan, &p.pan, &flags), "Read parked pan");
+        check(control_->Get(CameraControl_Tilt, &p.tilt, &flags), "Read parked tilt");
+    }
     check(control_->Get(CameraControl_Zoom, &p.zoom, &flags), "Read zoom");
     return p;
+}
+void Camera::waitForPosition(Position target) {
+    int stable = 0;
+    for (int attempt = 0; attempt < 60; ++attempt) {
+        auto p = read();
+        stable =
+            p.pan == target.pan && p.tilt == target.tilt && p.zoom == target.zoom ? stable + 1 : 0;
+        if (stable >= 3)
+            return;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    auto actual = read();
+    throw std::runtime_error("Camera did not settle at preset: requested " +
+                             std::to_string(target.pan) + "/" + std::to_string(target.tilt) + "/" +
+                             std::to_string(target.zoom) + ", measured " +
+                             std::to_string(actual.pan) + "/" + std::to_string(actual.tilt) + "/" +
+                             std::to_string(actual.zoom));
 }
 static const GUID obsbotXu = {
     0x9a1e7291, 0x6843, 0x4683, {0x6d, 0x92, 0x39, 0xbc, 0x79, 0x06, 0xee, 0x49}};

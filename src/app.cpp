@@ -422,7 +422,7 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             col.pszText = const_cast<wchar_t *>(L"Preset name");
             ListView_InsertColumn(list, 0, &col);
             col.cx = 280;
-            col.pszText = const_cast<wchar_t *>(L"Pan / Tilt / Zoom (driver units)");
+            col.pszText = const_cast<wchar_t *>(L"Pan / Tilt (degrees) / Zoom");
             ListView_InsertColumn(list, 1, &col);
             nameBox = ctl(L"EDIT", L"", Name, 24, 773, 310, 32, WS_TABSTOP | ES_AUTOHSCROLL);
             SendMessageW(nameBox, EM_SETCUEBANNER, TRUE, (LPARAM)L"Name for new preset or rename");

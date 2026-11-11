@@ -121,3 +121,19 @@ before running this version; no OBS source restart was used in the test.
 Firmware can park the gimbal when no video is being captured. Use Tiny PTZ
 preview when working alone, or keep the OBS camera source active while using
 controls without preview.
+
+## Preset position readback (v0.3.2)
+
+Pan and tilt while awake use native motor-angle telemetry, rounded to the
+nearest whole degree with the same rule for positive and negative angles.
+Windows driver tilt can truncate toward zero: the tested 17/-4/0 pose reported
+17/-3/0 through the driver despite native tilt readings around -4 degrees.
+The UI now uses the measured native angle rather than that truncated value.
+Zoom units and existing preset numbers are unchanged; no one-degree bias is
+added to movement commands.
+
+Recall waits for three matching measured position readings before applying
+saved tracking behavior. A position that does not settle produces an error.
+Tracking can still change framing after recall. Mechanical repeatability is
+not exact below one degree; native readings in the reported example ranged
+from -3.9 to -4.1 degrees and correctly round to -4.

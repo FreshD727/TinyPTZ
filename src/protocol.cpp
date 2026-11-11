@@ -1,4 +1,6 @@
 #include "protocol.hpp"
+#include <cmath>
+#include <stdexcept>
 namespace ptz {
 namespace {
 std::uint16_t crc(const unsigned char *data, size_t length) {
@@ -32,6 +34,23 @@ std::array<unsigned char, 60> wakePacket(bool awake, std::uint16_t sequence) {
     // transfer and verified independently of its incidental camera-ID padding.
     frame[32] = 1;
     return frame;
+}
+MotorAngles decodeMotorAngles(const std::vector<unsigned char> &payload) {
+    if (payload.size() != 18 && payload.size() != 24)
+        throw std::runtime_error("Unsupported native gimbal telemetry layout");
+    auto angle = [&](size_t offset) {
+        auto raw = (std::int16_t)((unsigned)payload[offset] | ((unsigned)payload[offset + 1] << 8));
+        return raw / 10.0;
+    };
+    MotorAngles result{angle(10), -angle(8)};
+    if (result.pan < -130 || result.pan > 130 || result.tilt < -90 || result.tilt > 90)
+        throw std::runtime_error("Native motor angles are outside camera limits");
+    return result;
+}
+long roundedAngle(double degrees) {
+    if (!std::isfinite(degrees) || degrees < -180 || degrees > 180)
+        throw std::runtime_error("Invalid gimbal angle");
+    return std::lround(degrees);
 }
 bool needsPowerCommand(bool awake, unsigned char reportedState, bool sessionAwake,
                        bool explicitRequest) {

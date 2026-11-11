@@ -8,18 +8,18 @@ This independent app uses Windows camera interfaces directly; see the
 
 ## Run
 
-Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ-v0.3.1` after building).
+Open **TinyPTZ.exe** in the portable folder (`dist/TinyPTZ-v0.3.2` after building).
 No installation, administrator access, Node,
 Python, .NET runtime or OBSBOT Center is needed to run the built app.
 The C++ runtime is statically linked; Windows supplies DirectShow.
-Move the entire TinyPTZ-v0.3.1 folder to any writable location (including USB storage).
+Move the entire TinyPTZ-v0.3.2 folder to any writable location (including USB storage).
 Presets are created in `data/presets.ptz` beside the executable.
 Do not run multiple writers (GUI, CLI or two copies) against the same data file.
 
 1. Select the Tiny SE and click **Connect**. This wakes the camera for control.
 2. Start preview if desired. Leave preview off when OBS is using the camera.
-3. Use the direction buttons (5 driver degrees per click), zoom buttons, or
-   enter whole-number driver units and choose **Apply position**.
+3. Use the direction buttons (5 degrees per click), zoom buttons, or
+   enter whole-degree pan/tilt and whole-number zoom units and choose **Apply position**.
 4. Open **Settings...** to edit Tracking, Image, or Device controls. Select a
    row, choose a value (or Automatic where available), and Apply. The current
    value is read back from the camera. Set-only requests are labeled explicitly.
@@ -62,12 +62,18 @@ another application already captures the camera. Close older Tiny PTZ copies
 before using this build so they cannot send the old power commands.
 
 The camera reports its own limits; unsupported controls or failed writes produce
-errors. Position readback is what the Windows driver returns and may reflect a
-commanded setpoint rather than measured gimbal motion. Recall pauses saved AI
-tracking for the PTZ move, restores saved configuration, then activates the saved
-tracking mode. Active tracking can move the camera afterward. Choose Tracking
-mode Off for a fixed framing. Physical movement and preview need camera
-permission in Windows.
+errors. Running-camera pan and tilt now come from native motor telemetry (0.1
+degree resolution), rounded symmetrically to whole degrees. This avoids the
+Windows driver's negative-tilt truncation (for example, reporting -3 when native
+tilt is -4.0). Zoom remains in Windows driver units. A sleeping camera reports
+its parked driver position. Small sub-degree servo variation is still possible.
+
+Recall waits for three consecutive measured readings to match the requested
+whole-degree position, rather than assuming that a fixed delay means movement
+has finished. It reports an error if the camera does not settle. Saved tracking
+is paused for the move and restored afterward; active tracking can move the
+camera again. Choose Tracking mode Off for fixed framing. Physical movement
+and preview need camera permission in Windows.
 
 Existing v1 PTZ-only files remain readable. Their first save writes v2 and keeps
 a `.v1.backup`. The build copies an existing preset file into the new release
@@ -120,7 +126,7 @@ Requires Windows, Visual Studio C++ Build Tools and Windows SDK. Run:
 
 This builds the native portable executables, runs core and hidden native-control
 regression tests, and creates
-`dist/TinyPTZ-v0.3.1-Windows-x64.zip`. CMake is also supported. No third-party binary
+`dist/TinyPTZ-v0.3.2-Windows-x64.zip`. CMake is also supported. No third-party binary
 from OBSBOT is bundled or loaded by the app. The development encoder probe
 loads the installed DLL only to generate reference packets.
 

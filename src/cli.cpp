@@ -17,8 +17,7 @@ void expect(Camera &c, Position target, const char *label) {
     auto actual = c.read();
     std::cout << label << ": target=" << target.pan << "," << target.tilt << "," << target.zoom
               << " actual=" << actual.pan << "," << actual.tilt << "," << actual.zoom << "\n";
-    if (std::abs(actual.pan - target.pan) > 1 || std::abs(actual.tilt - target.tilt) > 1 ||
-        actual.zoom != target.zoom)
+    if (actual.pan != target.pan || actual.tilt != target.tilt || actual.zoom != target.zoom)
         throw std::runtime_error(std::string(label) +
                                  ": camera did not reach the requested position");
 }
@@ -73,6 +72,58 @@ void hardwareTest(Camera &c) {
                 c.wake(false);
         } catch (const std::exception &e) {
             std::cerr << "Restore failed: " << e.what() << "\n";
+        }
+        throw;
+    }
+}
+void positionTest(Camera &c) {
+    bool asleep = c.sleeping();
+    c.wake(true);
+    auto original = c.read();
+    auto all = c.settings();
+    auto ai =
+        std::find_if(all.begin(), all.end(), [](auto &s) { return s.current.key == "ai_mode"; });
+    if (ai == all.end() || !ai->readable)
+        throw std::runtime_error("Tracking status unavailable");
+    auto originalMode = ai->current;
+    auto path = portableData().parent_path() / L"precision-test.ptz";
+    if (std::filesystem::exists(path))
+        throw std::runtime_error("Precision test file already exists");
+    auto restore = [&] {
+        c.applySetting({"ai_mode", 0, false});
+        c.move(original);
+        c.waitForPosition(original);
+        c.applySetting(originalMode);
+        if (asleep)
+            c.wake(false);
+    };
+    try {
+        PresetStore disk(path);
+        disk.items = {{L"17 minus 4", c.id(), {17, -4, 0}, {{"ai_mode", 0, false}}}};
+        disk.save();
+        PresetStore loaded(path);
+        loaded.load();
+        c.applySetting({"ai_mode", 0, false});
+        for (auto start : {Position{12, -8, 0}, Position{20, 3, 0}, Position{17, -3, 0}}) {
+            c.move(start);
+            c.waitForPosition(start);
+            c.recall(loaded.items.at(0));
+            std::cout << c.positionDiagnostics();
+            expect(c, {17, -4, 0}, "Disk preset recall");
+        }
+        c.move({17, 4, 0});
+        c.waitForPosition({17, 4, 0});
+        std::cout << c.positionDiagnostics();
+        expect(c, {17, 4, 0}, "Positive tilt");
+        std::filesystem::remove(path);
+        restore();
+        std::cout << "PASS: exact 17/-4/0 disk-backed recall from three directions, positive tilt, "
+                     "measured native angles and original state restored\n";
+    } catch (...) {
+        try {
+            restore();
+        } catch (const std::exception &e) {
+            std::cerr << "Restore error: " << e.what() << "\n";
         }
         throw;
     }
@@ -298,7 +349,8 @@ int wmain(int argc, wchar_t **argv) {
                 cmd != L"recall" && cmd != L"diagnostics" && cmd != L"hardware-test" &&
                 cmd != L"settings" && cmd != L"set" && cmd != L"settings-test" &&
                 cmd != L"boot-read" && cmd != L"image-defaults" && cmd != L"boot-test" &&
-                cmd != L"set-boot" && cmd != L"image-controls-test" && cmd != L"power-session")
+                cmd != L"set-boot" && cmd != L"image-controls-test" && cmd != L"power-session" &&
+                cmd != L"position-details" && cmd != L"position-test")
                 throw std::runtime_error("Unknown command; use --help");
             std::wstring id, name;
             SettingValue setting;
@@ -339,7 +391,11 @@ int wmain(int argc, wchar_t **argv) {
                     "Tiny SE not found. Use devices, then --device with its exact ID.");
             Camera c;
             c.connect(id);
-            if (cmd == L"power-session") {
+            if (cmd == L"position-test") {
+                positionTest(c);
+            } else if (cmd == L"position-details") {
+                std::cout << c.positionDiagnostics();
+            } else if (cmd == L"power-session") {
                 std::string action;
                 std::cout << "READY\n";
                 while (std::getline(std::cin, action) && action != "quit") {

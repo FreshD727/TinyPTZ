@@ -73,12 +73,14 @@ class Camera {
         return id_;
     }
     Range range(long property) const;
-    Position read() const;
+    Position read();
+    void waitForPosition(Position target);
     void setAxis(long property, long value);
     void move(Position position);
     void wake(bool awake, bool explicitRequest = false);
     bool sleeping();
     std::string diagnostics();
+    std::string positionDiagnostics();
     std::vector<Setting> settings();
     std::vector<SettingValue> snapshotSettings();
     void applySetting(const SettingValue &value);
