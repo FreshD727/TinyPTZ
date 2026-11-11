@@ -137,3 +137,26 @@ saved tracking behavior. A position that does not settle produces an error.
 Tracking can still change framing after recall. Mechanical repeatability is
 not exact below one degree; native readings in the reported example ranged
 from -3.9 to -4.1 degrees and correctly round to -4.
+
+## Numeric sliders (v0.3.3)
+
+Every setting edited as a number has a slider alongside its number field.
+The slider uses the setting's range and step, including negative Exposure
+Compensation, fractional composition offsets and gesture zoom, and large
+sleep-timeout ranges. Dragging updates the number; typing a complete number
+updates the slider. Partial input such as a minus sign is preserved while
+editing. **Apply selected setting** sends the chosen value to the camera.
+
+Manual sliders and number fields are disabled while Automatic is checked.
+Uncheck it to edit a manual value, then Apply. Read-only and unsupported
+controls remain disabled. Named choices retain their existing selectors.
+
+The main window also has Pan, Tilt and Zoom sliders using the connected
+camera's driver ranges. They stay synchronized with the position fields;
+**Apply position** sends all three values. Sliders are disabled until a camera
+is connected. The Settings button has moved to the top right to make room.
+
+Native-control regression tests run under a hidden parent window and exercise
+negative/fractional/large ranges, both synchronization directions, partial
+text input, automatic mode, and repeated Apply selection preservation. This
+UI change does not alter camera commands or the preset file format.

@@ -1,4 +1,5 @@
 #include "core.hpp"
+#include "numeric_slider.hpp"
 #include <algorithm>
 #include <cmath>
 #include <commctrl.h>
@@ -10,6 +11,7 @@ struct Editor {
     Camera *camera;
     HWND owner, window, category, list, value, choices, automatic, range, details, apply, defaults,
         selectedDefault;
+    NumericSlider numeric;
     HFONT font;
     bool refreshing = false;
     std::vector<Setting> settings;
@@ -62,9 +64,19 @@ void fill(Editor &e) {
         ListView_SetItemText(e.list, row, 2, s.details.data());
     }
     EnableWindow(e.apply, FALSE);
+    EnableWindow(e.numeric.track, FALSE);
     EnableWindow(e.selectedDefault, FALSE);
     EnableWindow(e.defaults, group == 1);
     e.refreshing = false;
+}
+void updateManualControls(Editor &e) {
+    auto *s = selected(e);
+    bool enabled =
+        s && s->writable &&
+        !(s->autoSupported && SendMessageW(e.automatic, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    EnableWindow(e.value, enabled);
+    EnableWindow(e.numeric.track,
+                 enabled && e.numeric.valid && e.numeric.ticks > 0 && s->choices.empty());
 }
 void showSelection(Editor &e);
 void refreshSettings(Editor &e, std::vector<Setting> settings) {
@@ -88,6 +100,7 @@ void showSelection(Editor &e) {
     auto *s = selected(e);
     if (!s) {
         EnableWindow(e.apply, FALSE);
+        EnableWindow(e.numeric.track, FALSE);
         EnableWindow(e.selectedDefault, FALSE);
         return;
     }
@@ -102,9 +115,11 @@ void showSelection(Editor &e) {
     SendMessageW(e.choices, CB_SETCURSEL, current, 0);
     ShowWindow(e.choices, s->choices.empty() ? SW_HIDE : SW_SHOW);
     ShowWindow(e.value, s->choices.empty() ? SW_SHOW : SW_HIDE);
+    ShowWindow(e.numeric.track, s->choices.empty() ? SW_SHOW : SW_HIDE);
+    e.numeric.configure(s->minimum, s->maximum, s->step, s->current.value, s->writable);
     SendMessageW(e.automatic, BM_SETCHECK, s->current.automatic ? BST_CHECKED : BST_UNCHECKED, 0);
     EnableWindow(e.automatic, s->autoSupported && s->writable);
-    EnableWindow(e.value, s->writable);
+    updateManualControls(e);
     EnableWindow(e.choices, s->writable);
     EnableWindow(e.apply, s->writable);
     EnableWindow(e.selectedDefault, s->writable && s->group == L"Image" && s->defaultAvailable);
@@ -147,14 +162,17 @@ LRESULT CALLBACK procedure(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             }
             e->details = control(
                 *e, L"STATIC", L"Select a setting to edit. Unsupported controls cannot be applied.",
-                0, 20, 465, 740, 54);
-            e->value = control(*e, L"EDIT", L"", 4, 20, 530, 240, 30, ES_AUTOHSCROLL | WS_TABSTOP);
+                0, 20, 455, 740, 44);
+            e->value = control(*e, L"EDIT", L"", 4, 20, 505, 240, 30, ES_AUTOHSCROLL | WS_TABSTOP);
             e->choices =
-                control(*e, WC_COMBOBOXW, L"", 5, 20, 530, 430, 250, CBS_DROPDOWNLIST | WS_TABSTOP);
+                control(*e, WC_COMBOBOXW, L"", 5, 20, 505, 430, 250, CBS_DROPDOWNLIST | WS_TABSTOP);
             ShowWindow(e->choices, SW_HIDE);
-            e->automatic = control(*e, L"BUTTON", L"Automatic", 6, 470, 530, 130, 30,
+            e->automatic = control(*e, L"BUTTON", L"Automatic", 6, 470, 505, 130, 30,
                                    BS_AUTOCHECKBOX | WS_TABSTOP);
-            e->range = control(*e, L"STATIC", L"", 0, 20, 575, 740, 25);
+            e->numeric.track = control(*e, TRACKBAR_CLASSW, L"", 11, 20, 540, 740, 32,
+                                       TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP);
+            e->numeric.edit = e->value;
+            e->range = control(*e, L"STATIC", L"", 0, 20, 580, 740, 25);
             e->apply =
                 control(*e, L"BUTTON", L"Apply selected setting", 7, 20, 615, 220, 36, WS_TABSTOP);
             e->defaults =
@@ -172,8 +190,20 @@ LRESULT CALLBACK procedure(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
         }
         if (!e)
             return DefWindowProcW(w, msg, wp, lp);
+        if (msg == WM_HSCROLL && (HWND)lp == e->numeric.track) {
+            e->numeric.fromTrack();
+            return 0;
+        }
         if (msg == WM_COMMAND) {
             int id = LOWORD(wp);
+            if (id == 4 && HIWORD(wp) == EN_CHANGE) {
+                e->numeric.fromEdit();
+                return 0;
+            }
+            if (id == 6 && HIWORD(wp) == BN_CLICKED) {
+                updateManualControls(*e);
+                return 0;
+            }
             if (id == 1 && HIWORD(wp) == CBN_SELCHANGE) {
                 fill(*e);
                 return 0;

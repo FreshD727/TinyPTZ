@@ -230,3 +230,18 @@ readbacks matched exactly; native tilt ranged -3.9..-4.1, while the driver kept
 reporting -3. The test restored the original rounded pose, tracking mode and
 sleep state. This demonstrates numeric/readback consistency and sub-degree
 servo variation, not an independent optical measurement of camera direction.
+
+## Numeric slider UI (v0.3.3)
+
+A shared `NumericSlider` adapter maps native trackbar ticks to metadata step
+indices, rather than casting fractional values or negative ranges to raw
+trackbar positions. Separate 32-bit range messages and TBM_GETPOS avoid the
+16-bit packed scroll-position limit. It supports numeric Settings controls and
+the main Pan/Tilt/Zoom fields. Automatic/read-only/unavailable controls disable
+manual entry. Slider edits stage values for the existing Apply actions.
+
+`settings_ui_tests` drives actual hidden trackbar/edit/checkbox controls through
+window messages. It verifies -9..9 mapping, .01 fractional steps, a 100000-step
+range, typed-value synchronization, partial input, automatic toggling, and
+selection/Apply behavior after refresh. No camera access or desktop automation
+was needed for this UI-only change.

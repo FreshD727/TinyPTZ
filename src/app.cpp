@@ -1,4 +1,5 @@
 #include "core.hpp"
+#include "numeric_slider.hpp"
 #include <algorithm>
 #include <commctrl.h>
 #include <commdlg.h>
@@ -40,10 +41,14 @@ enum {
     List,
     SettingsButton,
     IncludeSettings,
-    SetBoot
+    SetBoot,
+    PanSlider,
+    TiltSlider,
+    ZoomSlider
 };
 HINSTANCE instance;
 HWND mainWindow, deviceBox, status, previewHost, list, searchBox, nameBox, panBox, tiltBox, zoomBox;
+NumericSlider panControl, tiltControl, zoomControl;
 HFONT font, titleFont;
 HBRUSH background;
 Camera camera;
@@ -84,6 +89,13 @@ void error(const std::exception &e) {
 }
 void showPosition() {
     auto p = camera.read();
+    auto configure = [&](NumericSlider &slider, long axis, long value) {
+        auto r = camera.range(axis);
+        slider.configure(r.min, r.max, r.step, value, r.supported);
+    };
+    configure(panControl, CameraControl_Pan, p.pan);
+    configure(tiltControl, CameraControl_Tilt, p.tilt);
+    configure(zoomControl, CameraControl_Zoom, p.zoom);
     SetWindowTextW(panBox, std::to_wstring(p.pan).c_str());
     SetWindowTextW(tiltBox, std::to_wstring(p.tilt).c_str());
     SetWindowTextW(zoomBox, std::to_wstring(p.zoom).c_str());
@@ -378,7 +390,7 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
                                     0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
             auto title = ctl(L"STATIC", L"Tiny PTZ", 0, 24, 18, 260, 42);
             SendMessage(title, WM_SETFONT, (WPARAM)titleFont, TRUE);
-            label(L"Portable camera control  /  Unlimited named presets", 24, 64, 700);
+            label(L"Portable camera control  /  Unlimited named presets", 24, 64, 530);
             deviceBox = ctl(WC_COMBOBOXW, L"", Devices, 24, 105, 570, 280,
                             CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL);
             button(L"Refresh", Refresh, 606, 102, 90);
@@ -388,7 +400,7 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
                               L"preview off when OBS uses the camera.",
                               0, 24, 158, 520, 290, SS_CENTER | SS_CENTERIMAGE | WS_CLIPCHILDREN);
             button(L"Start preview", Preview, 24, 461, 140);
-            button(L"Settings...", SettingsButton, 574, 481, 248);
+            button(L"Settings...", SettingsButton, 574, 54, 248);
             ctl(L"BUTTON", L"Include tracking, image and device settings when saving presets",
                 IncludeSettings, 24, 497, 530, 24, BS_AUTOCHECKBOX | WS_TABSTOP);
             SendMessageW(GetDlgItem(w, IncludeSettings), BM_SETCHECK, BST_CHECKED, 0);
@@ -396,20 +408,31 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             button(L"Wake", Wake, 332, 461, 100);
             button(L"Sleep", Sleep, 444, 461, 100);
             label(L"CAMERA POSITION", 574, 158);
-            label(L"Pan", 574, 196, 50);
-            label(L"Tilt", 660, 196, 50);
-            label(L"Zoom", 746, 196, 60);
-            panBox = ctl(L"EDIT", L"0", Pan, 574, 222, 76, 30, WS_TABSTOP | ES_AUTOHSCROLL);
-            tiltBox = ctl(L"EDIT", L"0", Tilt, 660, 222, 76, 30, WS_TABSTOP | ES_AUTOHSCROLL);
-            zoomBox = ctl(L"EDIT", L"0", Zoom, 746, 222, 76, 30, WS_TABSTOP | ES_AUTOHSCROLL);
-            button(L"Apply position", Apply, 574, 264, 248);
-            button(L"Up", Up, 660, 310, 76);
-            button(L"Left", Left, 574, 350, 76);
-            button(L"Center", Home, 660, 350, 76);
-            button(L"Right", Right, 746, 350, 76);
-            button(L"Down", Down, 660, 390, 76);
-            button(L"Zoom -", ZoomOut, 574, 439, 118);
-            button(L"Zoom +", ZoomIn, 704, 439, 118);
+            label(L"Pan", 574, 194, 44);
+            label(L"Tilt", 574, 234, 44);
+            label(L"Zoom", 574, 274, 48);
+            panBox = ctl(L"EDIT", L"0", Pan, 746, 190, 76, 28, WS_TABSTOP | ES_AUTOHSCROLL);
+            tiltBox = ctl(L"EDIT", L"0", Tilt, 746, 230, 76, 28, WS_TABSTOP | ES_AUTOHSCROLL);
+            zoomBox = ctl(L"EDIT", L"0", Zoom, 746, 270, 76, 28, WS_TABSTOP | ES_AUTOHSCROLL);
+            panControl.track = ctl(TRACKBAR_CLASSW, L"", PanSlider, 622, 190, 116, 28,
+                                   TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP);
+            tiltControl.track = ctl(TRACKBAR_CLASSW, L"", TiltSlider, 622, 230, 116, 28,
+                                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP);
+            zoomControl.track = ctl(TRACKBAR_CLASSW, L"", ZoomSlider, 622, 270, 116, 28,
+                                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP);
+            panControl.edit = panBox;
+            tiltControl.edit = tiltBox;
+            zoomControl.edit = zoomBox;
+            for (auto *slider : {&panControl, &tiltControl, &zoomControl})
+                EnableWindow(slider->track, FALSE);
+            button(L"Apply position", Apply, 574, 310, 248);
+            button(L"Up", Up, 660, 350, 76, 28);
+            button(L"Left", Left, 574, 386, 76, 28);
+            button(L"Center", Home, 660, 386, 76, 28);
+            button(L"Right", Right, 746, 386, 76, 28);
+            button(L"Down", Down, 660, 422, 76, 28);
+            button(L"Zoom -", ZoomOut, 574, 458, 118, 30);
+            button(L"Zoom +", ZoomIn, 704, 458, 118, 30);
             label(L"PRESET LIBRARY", 24, 520, 250);
             searchBox = ctl(L"EDIT", L"", Search, 574, 513, 248, 30, WS_TABSTOP | ES_AUTOHSCROLL);
             SendMessageW(searchBox, EM_SETCUEBANNER, TRUE, (LPARAM)L"Search presets...");
@@ -444,14 +467,29 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             refresh();
             return 0;
         }
+        case WM_HSCROLL:
+            for (auto *slider : {&panControl, &tiltControl, &zoomControl})
+                if ((HWND)lp == slider->track) {
+                    slider->fromTrack();
+                    return 0;
+                }
+            break;
         case WM_COMMAND: {
             int id = LOWORD(wp);
+            if (HIWORD(wp) == EN_CHANGE && (id == Pan || id == Tilt || id == Zoom)) {
+                (id == Pan ? panControl : id == Tilt ? tiltControl : zoomControl).fromEdit();
+                return 0;
+            }
             if (id == Search && HIWORD(wp) == EN_CHANGE) {
                 fillList();
                 return 0;
             }
             if (id == Devices && HIWORD(wp) == CBN_SELCHANGE) {
                 camera.disconnect();
+                for (auto *slider : {&panControl, &tiltControl, &zoomControl}) {
+                    slider->valid = false;
+                    EnableWindow(slider->track, FALSE);
+                }
                 previewOn = false;
                 SetWindowTextW(GetDlgItem(w, Preview), L"Start preview");
                 int i = (int)SendMessage(deviceBox, CB_GETCURSEL, 0, 0);
@@ -514,7 +552,7 @@ int WINAPI wWinMain(HINSTANCE h, HINSTANCE, PWSTR, int show) {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(hr))
         return 1;
-    INITCOMMONCONTROLSEX ic{sizeof(ic), ICC_LISTVIEW_CLASSES};
+    INITCOMMONCONTROLSEX ic{sizeof(ic), ICC_LISTVIEW_CLASSES | ICC_BAR_CLASSES};
     InitCommonControlsEx(&ic);
     WNDCLASSW c{};
     c.lpfnWndProc = proc;

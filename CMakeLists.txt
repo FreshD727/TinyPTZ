@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(TinyPTZ VERSION 0.3.2 LANGUAGES CXX)
+project(TinyPTZ VERSION 0.3.3 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 add_library(ptz_core STATIC src/camera.cpp src/presets.cpp src/protocol.cpp src/settings.cpp)
