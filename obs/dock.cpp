@@ -1,10 +1,12 @@
 #include "dock.hpp"
+#include "preset_transfer.hpp"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDoubleSpinBox>
 #include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHeaderView>
@@ -20,6 +22,7 @@
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSlider>
+#include <QStandardPaths>
 #include <QTabWidget>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -103,6 +106,12 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     auto boot = new QPushButton("Set boot position", ptzPage);
     auto open = new QPushButton("Open preset file...", ptzPage);
     auto reload = new QPushButton("Reload file", ptzPage);
+    auto importButton = new QPushButton("Import presets...", ptzPage);
+    importButton->setObjectName("importPresets");
+    importButton->setToolTip("Merge a presets.ptz file into this library. Duplicate names get a numbered suffix.");
+    auto exportButton = new QPushButton("Export presets...", ptzPage);
+    exportButton->setObjectName("exportPresets");
+    exportButton->setToolTip("Save a copy of all presets, including their camera settings, to a .ptz file.");
     presetButtons->addWidget(recallButton, 0, 0);
     presetButtons->addWidget(capture, 0, 1);
     presetButtons->addWidget(replace, 1, 0);
@@ -111,6 +120,8 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     presetButtons->addWidget(boot, 2, 1);
     presetButtons->addWidget(open, 3, 0);
     presetButtons->addWidget(reload, 3, 1);
+    presetButtons->addWidget(importButton, 4, 0);
+    presetButtons->addWidget(exportButton, 4, 1);
     ptzLayout->addLayout(presetButtons);
     path_ = new QLabel(ptzPage);
     path_->setWordWrap(true);
@@ -232,6 +243,8 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     QObject::connect(capture, &QPushButton::clicked, this, [this] { capturePreset(false); });
     QObject::connect(replace, &QPushButton::clicked, this, [this] { capturePreset(true); });
     QObject::connect(open, &QPushButton::clicked, this, [this] { openPresets(); });
+    QObject::connect(importButton, &QPushButton::clicked, this, [this] { transferPresets(true); });
+    QObject::connect(exportButton, &QPushButton::clicked, this, [this] { transferPresets(false); });
     QObject::connect(reload, &QPushButton::clicked, this, [this] {
         try { store_->load(); refreshPresets(); status("Preset file reloaded."); }
         catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
@@ -551,6 +564,29 @@ void Dock::openPresets() {
         auto next = std::make_unique<ptz::PresetStore>(std::filesystem::path(path.toStdWString()));
         next->load(); store_ = std::move(next); saveConfig(); refreshPresets();
         status("Preset file opened. Changes made here will be saved to that file.");
+    } catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
+}
+void Dock::transferPresets(bool importing) {
+    if (!store_) return;
+    QFileDialog dialog(this, importing ? "Import Tiny PTZ presets" : "Export Tiny PTZ presets");
+    dialog.setNameFilter("Tiny PTZ presets (*.ptz)");
+    dialog.setDefaultSuffix("ptz");
+    dialog.setAcceptMode(importing ? QFileDialog::AcceptOpen : QFileDialog::AcceptSave);
+    dialog.setFileMode(importing ? QFileDialog::ExistingFile : QFileDialog::AnyFile);
+    dialog.setDirectory(importing ? QFileInfo(fileName(store_->path())).absolutePath()
+                                  : QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+    if (!importing) dialog.selectFile("presets.ptz");
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
+    try {
+        auto path = std::filesystem::path(dialog.selectedFiles().first().toStdWString());
+        if (importing) {
+            auto count = importPresetFile(*store_, path);
+            refreshPresets();
+            status(QString("Imported %1 presets. Existing presets and scene assignments were preserved.").arg(count));
+        } else {
+            auto count = exportPresetFile(*store_, path);
+            status(QString("Exported %1 presets to %2").arg(count).arg(fileName(path)));
+        }
     } catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
 }
 void Dock::capturePreset(bool replace) {

@@ -93,7 +93,7 @@ try {
     $env:QT_QPA_PLATFORM_PLUGIN_PATH = $previousPluginPath; $env:QT_FORCE_STDERR_LOGGING = $previousLogging
 }
 if ($Package) {
-    $release = Join-Path $PSScriptRoot 'dist\TinyPTZ-OBS-v0.4.0'
+    $release = Join-Path $PSScriptRoot 'dist\TinyPTZ-OBS-v0.4.1'
     New-Item -ItemType Directory -Force "$release\obs-plugins\64bit", "$release\data\obs-plugins\tiny-ptz" | Out-Null
     Copy-Item -LiteralPath "$out\tiny-ptz.dll" -Destination "$release\obs-plugins\64bit" -Force
     Copy-Item -LiteralPath docs/OBS-PLUGIN.md -Destination "$release\README.md" -Force
@@ -108,6 +108,6 @@ if ($Package) {
     if (Test-Path -LiteralPath $presets) { Copy-Item -LiteralPath $presets -Destination "$release\data\obs-plugins\tiny-ptz\presets.ptz" -Force }
     else { 'TINY_PTZ_PRESETS 2' | Set-Content -LiteralPath "$release\data\obs-plugins\tiny-ptz\presets.ptz" -Encoding utf8 }
     Compress-Archive -LiteralPath src,obs,tests,CMakeLists.txt,build-obs.ps1,docs/OBS-PLUGIN.md,docs/SETTINGS.md -DestinationPath "$release\TinyPTZ-plugin-source.zip" -Force
-    Compress-Archive -Path "$release\*" -DestinationPath dist/TinyPTZ-OBS-v0.4.0-Windows-x64.zip -Force
+    Compress-Archive -Path "$release\*" -DestinationPath dist/TinyPTZ-OBS-v0.4.1-Windows-x64.zip -Force
     Write-Host "OBS plugin package: $release"
 }

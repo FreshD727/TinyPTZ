@@ -81,6 +81,7 @@ class Dock : public QWidget {
     void stageAxis(int index, bool final);
     void refreshPresets();
     void openPresets();
+    void transferPresets(bool importing);
     void capturePreset(bool replace);
     void recall(const ptz::Preset &preset, bool scene = false);
     void saveConfig();

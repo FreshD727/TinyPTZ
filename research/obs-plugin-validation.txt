@@ -1,3 +1,8 @@
+Tiny PTZ OBS plugin v0.4.1 preset-transfer validation — 2026-11-12
+PASS: preset import/export, duplicate name suffixes, Unicode, negative PTZ, fractional settings, auto flags, current-disk export, source preservation, invalid and self-file rejection.
+PASS: import/export buttons present; existing worker, dock, scene and module-loader regression tests.
+Camera/protocol code is unchanged; earlier hardware evidence below is from v0.4.0.
+
 Tiny PTZ OBS plugin v0.4.0 validation — 2026-11-12
 Windows x64; installed OBS 31.0.0-beta3; runtime/development Qt 6.6.3.
 Source build uses the shared CRT and official SHA-256-checked OBS/Qt files.

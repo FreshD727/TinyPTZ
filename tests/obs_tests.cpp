@@ -1,4 +1,5 @@
 #include "dock.hpp"
+#include "preset_transfer.hpp"
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -14,6 +15,7 @@
 #include <QTemporaryDir>
 #include <QTreeWidget>
 #include <future>
+#include <fstream>
 #include <iostream>
 
 static void require(bool value, const char *message) {
@@ -67,6 +69,49 @@ static void ruleTests() {
     rules.remove(other);
     require(!rules.lookup("Show B", "scene-uuid"), "deleting preset removes assignment");
 }
+static void transferTests(const std::filesystem::path &directory) {
+    ptz::PresetStore active(directory / L"active.ptz"), incoming(directory / L"incoming.ptz");
+    active.items = {{L"Wide", L"camera-a", {17, -4, 0}, {{"brightness", 50, false}}},
+                    {L"Wide (2)", L"camera-a", {0, 0, 0}, {}}};
+    active.save();
+    incoming.items = {{L"Wide", L"camera-a", {-17, -4, 3}, {{"composition_x", .15, false}, {"exposure", -5, true}}},
+                      {L"Wide", L"camera-b", {0, 1, 2}, {}},
+                      {L"Küche", L"camera-a", {1, 2, 3}, {}}};
+    incoming.save();
+    auto read = [](const std::filesystem::path &path) {
+        std::ifstream file(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(file), {});
+    };
+    auto sourceBytes = read(incoming.path());
+    require(tinyobs::importPresetFile(active, incoming.path()) == 3, "imports all presets");
+    require(active.items.size() == 5 && active.items[0].position.pan == 17 &&
+            active.items[2].name == L"Wide (3)" && active.items[3].name == L"Wide",
+            "import preserves existing presets and resolves same-camera name collisions");
+    require(active.items[2].position.tilt == -4 && active.items[2].settings[0].value == .15 &&
+            active.items[2].settings[1].automatic && active.items[4].name == L"Küche",
+            "import preserves negative coordinates, fractional settings, auto mode and Unicode");
+    require(read(incoming.path()) == sourceBytes, "import never edits source library");
+    auto original = read(active.path());
+    auto reject = [&](auto operation) {
+        bool rejected = false; try { operation(); } catch (const std::exception &) { rejected = true; }
+        require(rejected, "unsafe/invalid transfer rejected");
+        require(read(active.path()) == original && active.items.size() == 5, "failed transfer leaves active library intact");
+    };
+    reject([&] { tinyobs::importPresetFile(active, active.path()); });
+    reject([&] { tinyobs::exportPresetFile(active, active.path()); });
+    std::ofstream(directory / L"invalid.ptz") << "TINY_PTZ_PRESETS 2\nnot a preset\n";
+    reject([&] { tinyobs::importPresetFile(active, directory / L"invalid.ptz"); });
+    reject([&] { tinyobs::importPresetFile(active, directory / L"missing.ptz"); });
+    // An external edit must be included even if the dock's cached list is older.
+    ptz::PresetStore fresh(active.path()); fresh.load();
+    fresh.items.push_back({L"External edit", L"camera-a", {0, 0, 0}, {}}); fresh.save();
+    auto exportedPath = directory / L"exported.ptz";
+    require(tinyobs::exportPresetFile(active, exportedPath) == 6, "export reads latest disk library");
+    ptz::PresetStore exported(exportedPath); exported.load();
+    require(exported.items.size() == 6 && exported.items[2].settings[1].automatic &&
+            exported.items.back().name == L"External edit", "export roundtrip preserves full library and settings");
+    std::cout << "PASS: preset import/export, collisions, Unicode/settings roundtrip, current disk state, source preservation and invalid/self-file rejection\n";
+}
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setStyle("Fusion");
@@ -74,6 +119,7 @@ int main(int argc, char **argv) {
         workerTests(); ruleTests();
         QTemporaryDir temp;
         require(temp.isValid(), "temporary config directory");
+        transferTests(std::filesystem::path(temp.path().toStdWString()) / L"transfer");
         auto config = std::filesystem::path(temp.path().toStdWString()) / L"dock.json";
         auto library = config.parent_path() / L"saved.ptz";
         ptz::PresetStore presets(library);
@@ -86,6 +132,8 @@ int main(int argc, char **argv) {
             tinyobs::Dock dock(config, library, host, false);
             auto list = dock.findChild<QListWidget *>("presets");
             require(list && list->count() == 1, "saved portable presets load in dock");
+            require(dock.findChild<QPushButton *>("importPresets") && dock.findChild<QPushButton *>("exportPresets"),
+                    "preset import and export buttons available in dock");
             auto automation = dock.findChild<QCheckBox *>("sceneAutomation");
             require(!automation->isChecked(), "scene movement opt in");
             auto target = dock.findChild<QComboBox *>("scenePreset");
