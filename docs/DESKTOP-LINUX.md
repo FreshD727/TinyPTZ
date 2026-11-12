@@ -1,14 +1,16 @@
-# Tiny PTZ for Linux — v0.7.1
+# Tiny PTZ for Linux — v0.7.2
 
 Standalone Qt controller for the OBSBOT Tiny SE with live PTZ controls, unlimited
 presets, tracking/image/device settings, camera auto-connect, dark/light/system
 themes and an optional camera preview. OBS Studio and OBSBOT Center are not needed.
 
-v0.7.1 replaces the Linux GPU video widget with software frame rendering for
-systems where capture activates but the picture stays black, including the
-reported Fedora 44 AppImage case. Preview becomes live only after decoding a
-frame; missing/stalled streams time out with an error. The Fedora laptop still
-needs a verification run with this updated release.
+v0.7.2 fixes preview device selection with Qt 6.4's opaque GStreamer IDs and
+includes its required camera-startup plugin. The old device-matching failure
+incorrectly suggested checking permissions. Actual device paths are matched
+first; opaque IDs use an unambiguous camera name. Duplicate names are reported
+instead of silently selecting another camera. Software rendering from v0.7.1
+is retained. Preview becomes live only after decoding a frame; missing/stalled
+streams time out with an error. The Fedora laptop still needs a verification run.
 
 ## Run the AppImage
 
@@ -18,8 +20,8 @@ and its video dependencies; it still uses the host's kernel, graphics drivers
 and glibc. Older distributions need a build against their own libraries.
 
 ```bash
-chmod +x TinyPTZ-v0.7.1-Linux-x86_64.AppImage
-./TinyPTZ-v0.7.1-Linux-x86_64.AppImage
+chmod +x TinyPTZ-v0.7.2-Linux-x86_64.AppImage
+./TinyPTZ-v0.7.2-Linux-x86_64.AppImage
 ```
 
 If your system lacks FUSE, run it with `--appimage-extract-and-run`, or extract
@@ -29,7 +31,8 @@ Select the camera and click **Connect** the first time. Leave automatic
 connection checked to reconnect on later launches. PTZ position updates
 automatically; sliders apply live. Use **Start preview** for video and **Stop
 preview** before another app captures the camera. Preview stays off at startup.
-Qt Multimedia matches the selected device node, including stable-device symlinks.
+Qt Multimedia matches the selected device node, including stable-device symlinks,
+or a unique camera name when the backend exposes opaque IDs.
 No microphone is opened or recorded.
 
 The camera must use the `uvcvideo` driver. Your user needs read/write access to
@@ -46,7 +49,7 @@ By default, data is written to `$XDG_DATA_HOME/TinyPTZ`, normally
 For a portable folder beside the AppImage, use an absolute path:
 
 ```bash
-./TinyPTZ-v0.7.1-Linux-x86_64.AppImage --data-dir "$PWD/TinyPTZ-data"
+./TinyPTZ-v0.7.2-Linux-x86_64.AppImage --data-dir "$PWD/TinyPTZ-data"
 ```
 
 The preset import/export buttons transfer `.ptz` libraries. Windows and Linux

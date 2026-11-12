@@ -1,4 +1,4 @@
-# Linux standalone v0.7.1 validation
+# Linux standalone v0.7.2 validation
 
 Built in Ubuntu 24.04 WSL, GCC 13, glibc 2.39 and Qt 6.4.2.
 
@@ -44,3 +44,20 @@ Windows regression tests pass. The reported Fedora 44 laptop is not locally
 available; this candidate must still be verified with its physical camera.
 Logs: build/linux-software-preview-tests.log, build/linux-preview-v071-package.log,
 build/desktop/software-preview-regression.log.
+
+## v0.7.2 opaque device IDs and camera startup
+
+The pinned upstream Qt v6.4.2 qgstreamervideodevices.cpp assigns generated numeric
+IDs to GstDevice entries. These IDs cannot be compared to /dev/video paths.
+Direct paths/symlinks now take priority; opaque IDs can match only a unique,
+normalized selected-camera name. Tests cover numeric IDs, enumeration-order
+changes, duplicate-name rejection, canonical symlinks and rejection of a known
+different device path. Missing entries no longer claim a permissions failure.
+
+The upstream qgstreamercamera.cpp constructor also instantiates videotestsrc
+before replacing it with the selected camera. This required plugin is now in
+the AppImage and included in the bundled factory check. A QCamera construction
+test checks the startup path without activating a physical stream.
+Upstream reference: https://github.com/qt/qtmultimedia/tree/v6.4.2/src/plugins/multimedia/gstreamer
+Logs: build/linux-preview-v072-package.log and build/desktop/opaque-camera-regression.log.
+Fedora camera operation still needs verification on the user's laptop.

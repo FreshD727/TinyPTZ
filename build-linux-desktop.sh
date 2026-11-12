@@ -26,7 +26,7 @@ cmake --install "$build" --prefix "$appdir/usr" --component desktop
 triplet="$(gcc -dumpmachine)"
 gst="/usr/lib/$triplet/gstreamer-1.0"
 mkdir -p "$appdir/usr/lib/gstreamer-1.0" "$appdir/usr/libexec"
-for plugin in app coreelements typefindfunctions video4linux2 videoconvertscale videorate jpeg playback camerabin encoding autodetect audioconvert audioresample volume pulseaudio; do
+for plugin in app coreelements typefindfunctions video4linux2 videotestsrc videoconvertscale videorate jpeg playback camerabin encoding autodetect audioconvert audioresample volume pulseaudio; do
     cp "$gst/libgst$plugin.so" "$appdir/usr/lib/gstreamer-1.0/"
 done
 cp "/usr/lib/$triplet/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner" "$appdir/usr/libexec/"
@@ -42,10 +42,10 @@ export EXTRA_QT_MODULES='waylandclient'
 python3 "$root/packaging/linux/collect-notices.py" "$appdir"
 bash "$root/packaging/linux/verify-appdir.sh" "$appdir"
 mkdir -p "$root/dist"
-export OUTPUT="$root/dist/TinyPTZ-v0.7.1-Linux-x86_64.AppImage" VERSION=0.7.1 ARCH=x86_64
+export OUTPUT="$root/dist/TinyPTZ-v0.7.2-Linux-x86_64.AppImage" VERSION=0.7.2 ARCH=x86_64
 "$tools/linuxdeploy-x86_64.AppImage" --appdir "$appdir" \
     --custom-apprun "$root/packaging/linux/AppRun" --output appimage
 chmod +x "$OUTPUT"
 QT_QPA_PLATFORM=offscreen "$OUTPUT" --appimage-extract-and-run --check-runtime --data-dir "$build/runtime-check-data"
-cp "$root/docs/DESKTOP-LINUX.md" "$root/dist/TinyPTZ-v0.7.1-Linux-README.md"
+cp "$root/docs/DESKTOP-LINUX.md" "$root/dist/TinyPTZ-v0.7.2-Linux-README.md"
 sha256sum "$OUTPUT"

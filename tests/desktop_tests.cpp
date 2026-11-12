@@ -20,11 +20,40 @@
 #include <QVideoSink>
 #include <QVideoFrame>
 #include <QVideoFrameFormat>
+#include <QCamera>
+#include "linux_camera_match.hpp"
 #endif
 #include <algorithm>
 #include <iostream>
+#include <fstream>
 static void require(bool value, const char *message) { if (!value) throw std::runtime_error(message); }
 static void uiTests(QApplication &app) {
+#ifndef _WIN32
+    {
+        QTemporaryDir temp;
+        auto selected = ptz::filePath(temp.path().toStdWString()) / "camera";
+        auto other = selected.parent_path() / "other";
+        auto link = selected.parent_path() / "by-id";
+        std::ofstream(selected).close(); std::ofstream(other).close();
+        std::filesystem::create_symlink(selected, link);
+        using tinyapp::matchPreviewDevice;
+        using tinyapp::PreviewDeviceIdentity;
+        std::vector<PreviewDeviceIdentity> ids{{"0", "Laptop camera"}, {"1", "OBSBOT Tiny SE"}};
+        require(matchPreviewDevice(link, "OBSBOT Tiny SE", ids).index == 1, "Qt 6.4 opaque camera IDs match by unique name");
+        std::reverse(ids.begin(), ids.end());
+        require(matchPreviewDevice(link, "OBSBOT Tiny SE", ids).index == 0, "opaque camera matching does not depend on enumeration order");
+        ids = {{"0", "OBSBOT Tiny SE"}, {"1", "OBSBOT Tiny SE"}};
+        require(matchPreviewDevice(link, "OBSBOT Tiny SE", ids).index < 0, "duplicate camera names never silently select another device");
+        ids = {{QByteArray::fromStdString(other.u8string()), "OBSBOT Tiny SE"}};
+        require(matchPreviewDevice(link, "OBSBOT Tiny SE", ids).index < 0, "a known different device path cannot match by name");
+        ids.push_back({QByteArray::fromStdString(selected.u8string()), "OBSBOT Tiny SE"});
+        require(matchPreviewDevice(link, "OBSBOT Tiny SE", ids).index == 1, "canonical path match wins over duplicate names");
+        require(!matchPreviewDevice(link, "OBSBOT Tiny SE", {}).error.contains("permission", Qt::CaseInsensitive),
+                "a missing video-device match is not reported as a permissions failure");
+        QCamera startup;
+        require(!startup.isActive(), "camera backend constructs without starting a stream");
+    }
+#endif
     QDir().mkpath("build/desktop");
     QTemporaryDir temp; require(temp.isValid(), "temporary portable data directory");
     auto data = ptz::filePath(temp.path().toStdWString());

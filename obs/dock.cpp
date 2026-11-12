@@ -448,6 +448,7 @@ void Dock::configure(Numeric &n, double low, double high, double step, double va
     n.number->setValue(value);
     n.number->setEnabled(enabled && valid);
 }
+QString Dock::selectedDeviceName() const { return devices_->currentText(); }
 void Dock::discover() {
     auto previous = device();
     run("devices", [this, previous](ptz::Camera &) {

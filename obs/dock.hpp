@@ -44,6 +44,7 @@ class Dock : public QWidget {
     void setThemePreference(const QString &theme);
     QString themePreference() const { return theme_; }
     std::wstring selectedDevice() const { return device(); }
+    QString selectedDeviceName() const;
     void setPreviewStatus(const QString &message, bool error = false) { status(message, error); }
     std::function<void(bool, const QString &)> connectionChanged;
     std::function<void(bool, const QString &)> previewChanged;

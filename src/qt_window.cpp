@@ -21,6 +21,7 @@
 #include <QVideoSink>
 #include <QVideoFrame>
 #include <QDebug>
+#include "linux_camera_match.hpp"
 #endif
 #include <algorithm>
 namespace tinyapp {
@@ -295,17 +296,19 @@ void Window::stopLinuxPreview(const QString &message) {
 void Window::startLinuxPreview() {
     stopLinuxPreview();
     const auto selected = ptz::filePath(controls_->selectedDevice());
-    QCameraDevice match;
-    for (const auto &candidate : QMediaDevices::videoInputs()) {
-        std::error_code error;
-        if (std::filesystem::equivalent(selected, std::filesystem::u8path(candidate.id().toStdString()), error) && !error) {
-            match = candidate; break;
-        }
+    const auto devices = QMediaDevices::videoInputs();
+    std::vector<PreviewDeviceIdentity> identities;
+    qInfo() << "TinyPTZ preview: selected" << QString::fromStdWString(controls_->selectedDevice()) << controls_->selectedDeviceName();
+    for (const auto &candidate : devices) {
+        identities.push_back({candidate.id(), candidate.description()});
+        qInfo() << "TinyPTZ preview: video device" << candidate.id() << candidate.description();
     }
-    if (match.isNull()) {
-        stopLinuxPreview("The selected camera is unavailable for preview. Check device permissions and close other video apps.");
+    const auto resolved = matchPreviewDevice(selected, controls_->selectedDeviceName(), identities);
+    if (resolved.index < 0) {
+        stopLinuxPreview(resolved.error);
         return;
     }
+    const auto match = devices[resolved.index];
     camera_ = new QCamera(match, this);
     capture_->setCamera(camera_);
     QObject::connect(camera_, &QCamera::activeChanged, this, [this](bool active) {
