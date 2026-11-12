@@ -1,4 +1,4 @@
-# Tiny PTZ for Linux — v0.7.4
+# Tiny PTZ for Linux — v0.7.5
 
 Standalone Qt controller for the OBSBOT Tiny SE with live PTZ controls, unlimited
 presets, tracking/image/device settings, camera auto-connect, dark/light/system
@@ -9,7 +9,7 @@ direct GStreamer capture/decode pipeline. Preview no longer matches camera names
 or Qt's opaque IDs, so identically named devices are supported. Software rendering
 is retained. Preview becomes live only after decoding a frame; missing/stalled
 streams time out with an error. The user confirmed this preview works on Fedora 44
-with v0.7.3. v0.7.4 adds a matching application icon and launcher registration.
+with v0.7.3. v0.7.5 adds a matching application icon and launcher registration.
 
 ## Run the AppImage
 
@@ -19,20 +19,16 @@ and its video dependencies; it still uses the host's kernel, graphics drivers
 and glibc. Older distributions need a build against their own libraries.
 
 ```bash
-chmod +x TinyPTZ-v0.7.4-Linux-x86_64.AppImage
-./TinyPTZ-v0.7.4-Linux-x86_64.AppImage
+chmod +x TinyPTZ-v0.7.5-Linux-x86_64.AppImage
+./TinyPTZ-v0.7.5-Linux-x86_64.AppImage
 ```
 
-The camera/PTZ icon is embedded in the application and AppImage. For the
-applications-menu and dock icon on Fedora/GNOME/KDE Wayland, register the launcher
-once, after placing the AppImage where you want to keep it:
-
-```bash
-./TinyPTZ-v0.7.4-Linux-x86_64.AppImage --install-desktop-entry
-```
-
-This installs the launcher and icon for your user only. If you move the AppImage,
-run that command again to update its launcher path.
+The camera/PTZ icon is embedded in the application and AppImage. On first launch,
+the app adds its launcher and icon to your user applications menu automatically,
+including Fedora/GNOME/KDE Wayland. No command or administrator access is needed.
+If you move or rename the AppImage, launch it once from its new location to update
+the menu entry. Existing matching files are left untouched. Registration failures
+are logged and do not prevent the camera controller from opening.
 
 If your system lacks FUSE, run it with `--appimage-extract-and-run`, or extract
 it once using `--appimage-extract` and run `squashfs-root/AppRun`.
@@ -59,7 +55,7 @@ By default, data is written to `$XDG_DATA_HOME/TinyPTZ`, normally
 For a portable folder beside the AppImage, use an absolute path:
 
 ```bash
-./TinyPTZ-v0.7.4-Linux-x86_64.AppImage --data-dir "$PWD/TinyPTZ-data"
+./TinyPTZ-v0.7.5-Linux-x86_64.AppImage --data-dir "$PWD/TinyPTZ-data"
 ```
 
 The preset import/export buttons transfer `.ptz` libraries. Windows and Linux

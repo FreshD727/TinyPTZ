@@ -4,7 +4,7 @@ A native Qt camera controller for the OBSBOT Tiny SE, with a resizable preview,
 dark/light/system themes, live PTZ controls, tracking/image/device settings and
 unlimited presets. The standalone app and OBS plugin share the same camera core.
 
-The standalone application also runs on Linux. The **v0.7.4 x86_64 AppImage**
+The standalone application also runs on Linux. The **v0.7.5 x86_64 AppImage**
 includes Qt and video-preview dependencies and targets Ubuntu 24.04 or compatible
 newer systems. See [Linux standalone instructions](docs/DESKTOP-LINUX.md) for
 launching, portable data storage and building it yourself. The Windows release

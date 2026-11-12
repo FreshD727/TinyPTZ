@@ -1,4 +1,4 @@
-# Linux standalone v0.7.4 validation
+# Linux standalone v0.7.5 validation
 
 Built in Ubuntu 24.04 WSL, GCC 13, glibc 2.39 and Qt 6.4.2.
 
@@ -97,3 +97,15 @@ both platform regression suites passed. The user reported v0.7.3 camera control
 and preview working on Fedora; icon changes do not alter the capture backend.
 Logs: build/linux-icon-package.log, build/linux-icon-launcher-check.log,
 build/desktop/icon-build.log.
+
+## v0.7.5 first-launch menu registration
+
+Normal Linux GUI startup now installs/refreshes the user launcher and icon
+without a command. Identical files are compared before writing, so later
+launches do not rewrite them. A stale executable location or missing icon is
+repaired on the next launch. Failures are logged without stopping the controller;
+runtime/preview check modes skip automatic registration. --install-desktop-entry
+remains available for explicit repair. The AppImage camera-preview self-check
+and Linux core/GUI/backend tests pass. Automatic startup registration is checked
+in an isolated XDG_DATA_HOME with the actual AppImage.
+Logs: build/linux-auto-launcher-package.log and build/linux-auto-launcher-check.log.

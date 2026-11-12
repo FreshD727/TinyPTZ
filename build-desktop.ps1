@@ -59,7 +59,7 @@ try {
     }
 } finally { $env:PATH = $oldPath; $env:QT_QPA_PLATFORM = $oldPlatform; $env:QT_QPA_PLATFORM_PLUGIN_PATH = $oldPluginPath }
 if ($Package) {
-    $release = Join-Path $PSScriptRoot 'dist\TinyPTZ-v0.7.4'
+    $release = Join-Path $PSScriptRoot 'dist\TinyPTZ-v0.7.5'
     New-Item -ItemType Directory -Force $release,"$release\platforms","$release\sources","$release\licenses\Qt","$release\data" | Out-Null
     Copy-Item -LiteralPath "$out\TinyPTZ.exe","$out\ptzctl.exe",README.md,THIRD-PARTY-NOTICES.md -Destination $release -Force
     Copy-Item -LiteralPath "$QtRoot\bin\Qt6Core.dll","$QtRoot\bin\Qt6Gui.dll","$QtRoot\bin\Qt6Widgets.dll" -Destination $release -Force
@@ -87,6 +87,6 @@ if ($Package) {
     Copy-Item -LiteralPath "$licenseTemp\qtbase-everywhere-src-6.6.3\LICENSES\GPL-2.0-only.txt" -Destination "$release\LICENSE.txt" -Force
     Compress-Archive -LiteralPath src,obs,tests,assets,packaging,CMakeLists.txt,build.ps1,build-desktop.ps1,build-linux.sh,build-linux-desktop.sh,README.md,LICENSE.txt,THIRD-PARTY-NOTICES.md,docs -DestinationPath "$release\sources\TinyPTZ-source.zip" -Force
     if (Test-Path -LiteralPath research/desktop-qt-validation.txt) { Copy-Item -LiteralPath research/desktop-qt-validation.txt -Destination "$release\VALIDATION.txt" -Force }
-    Compress-Archive -LiteralPath $release -DestinationPath dist/TinyPTZ-v0.7.4-Windows-x64.zip -Force
+    Compress-Archive -LiteralPath $release -DestinationPath dist/TinyPTZ-v0.7.5-Windows-x64.zip -Force
     Write-Host "Portable Qt app: $release\TinyPTZ.exe"
 }

@@ -13,7 +13,7 @@
 #endif
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
-    app.setApplicationName("TinyPTZ"); app.setApplicationDisplayName("Tiny PTZ"); app.setApplicationVersion("0.7.4");
+    app.setApplicationName("TinyPTZ"); app.setApplicationDisplayName("Tiny PTZ"); app.setApplicationVersion("0.7.5");
     app.setWindowIcon(QIcon(":/tinyptz/icon.png"));
     app.setDesktopFileName("tinyptz");
     app.setStyle("Fusion");
@@ -42,6 +42,10 @@ int main(int argc, char **argv) {
 #ifndef _WIN32
         const bool previewCheck = parser.isSet("check-preview-runtime");
         runtimeCheck = runtimeCheck || previewCheck;
+        if (!runtimeCheck) {
+            auto error = tinyapp::installDesktopEntry();
+            if (!error.isEmpty()) qWarning().noquote() << "Application-menu registration failed:" << error;
+        }
 #endif
 #ifdef _WIN32
         auto data = ptz::portableData().parent_path();

@@ -25,6 +25,8 @@ inline QString installDesktopEntry() {
     auto iconPath = base + "/icons/hicolor/256x256/apps/tinyptz.png";
     auto entryPath = base + "/applications/tinyptz.desktop";
     auto write = [](const QString &path, const QByteArray &bytes) {
+        QFile existing(path);
+        if (existing.open(QIODevice::ReadOnly) && existing.readAll() == bytes) return true;
         if (!QDir().mkpath(QFileInfo(path).absolutePath())) return false;
         QSaveFile file(path);
         return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit();
