@@ -268,9 +268,9 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
         }
         presentSettings({});
         for (auto &axis : axes_) configure(axis, 0, 0, 1, 0, false);
-        if (standalone_ && !device().empty()) {
+        if (!device().empty()) {
             lastDevice_ = device(); saveConfig();
-            if (autoConnect_->isChecked()) readCamera();
+            if (standalone_ && autoConnect_->isChecked()) readCamera();
         }
     });
     auto power = [this](bool awake) {
@@ -389,12 +389,12 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
             saveConfig(); if (enabled && !connected_ && !connecting_ && !device().empty()) readCamera();
         });
         QObject::connect(search_, &QLineEdit::textChanged, this, [this] { filterPresets(); });
-        reconnectTimer_.setInterval(4000);
-        QObject::connect(&reconnectTimer_, &QTimer::timeout, this, [this] {
-            if (!connected_ && !connecting_ && autoConnect_->isChecked() && !lastDevice_.empty()) discover();
-        });
-        if (startDiscovery) reconnectTimer_.start();
     }
+    reconnectTimer_.setInterval(4000);
+    QObject::connect(&reconnectTimer_, &QTimer::timeout, this, [this] {
+        if (!connected_ && !connecting_ && (!standalone_ || autoConnect_->isChecked()) && !lastDevice_.empty()) discover();
+    });
+    if (startDiscovery) reconnectTimer_.start();
     if (startDiscovery) discover();
 }
 
@@ -453,40 +453,32 @@ void Dock::discover() {
     run("devices", [this, previous](ptz::Camera &) {
         auto list = ptz::devices();
         post([this, list, previous] {
-            if (standalone_) {
-                auto wanted = lastDevice_.empty() ? previous : lastDevice_;
-                {
-                    QSignalBlocker block(devices_);
-                    devices_->clear();
-                    for (auto &d : list) devices_->addItem(qs(d.name), qs(d.id));
-                    int index = devices_->findData(qs(wanted));
-                    if (index < 0 && wanted.empty()) {
-                        for (int i = 0; i < (int)list.size(); ++i)
-                            if (list[i].name.find(L"Tiny SE") != std::wstring::npos) { index = i; break; }
-                        if (index < 0 && !list.empty()) index = 0;
-                    }
-                    devices_->setCurrentIndex(index);
+            auto wanted = lastDevice_.empty() ? previous : lastDevice_;
+            {
+                QSignalBlocker block(devices_);
+                devices_->clear();
+                for (auto &d : list) devices_->addItem(qs(d.name), qs(d.id));
+                int index = devices_->findData(qs(wanted));
+                if (index < 0 && wanted.empty()) {
+                    for (int i = 0; i < (int)list.size(); ++i)
+                        if (list[i].name.find(L"Tiny SE") != std::wstring::npos) { index = i; break; }
+                    if (index < 0 && !list.empty()) index = 0;
                 }
-                if (device() != previous) {
-                    ++deviceRevision_; ++positionRevision_;
-                    connected_ = connecting_ = pollPending_ = false;
-                    edits_.clear(); liveTimer_.stop(); worker_->cancel("live:"); worker_->cancel("poll");
-                    worker_->submit("disconnect", [](ptz::Camera &c) { c.disconnect(); });
-                    if (previewChanged) previewChanged(false, {});
-                    if (connectionChanged) connectionChanged(false, {});
-                    presentSettings({});
-                    for (auto &axis : axes_) configure(axis, 0, 0, 1, 0, false);
-                }
-                if (!wanted.empty() && device() == wanted && autoConnect_->isChecked() && !connected_ && !connecting_) readCamera();
-                else if (connected_) status("Camera connected. Position updates automatically.");
-                else if (!connecting_) status(device().empty() ? "Waiting for your last camera. You can also choose another camera." : "Camera ready. Click Connect.");
-                return;
+                devices_->setCurrentIndex(index);
             }
-            devices_->clear();
-            for (auto &d : list) devices_->addItem(qs(d.name), qs(d.id));
-            int index = devices_->findData(qs(previous));
-            if (index >= 0) devices_->setCurrentIndex(index);
-            status(list.empty() ? "No camera found. Connect the Tiny SE, then rescan." : "Select a camera and click Connect / read.");
+            if (device() != previous) {
+                ++deviceRevision_; ++positionRevision_;
+                connected_ = connecting_ = pollPending_ = false;
+                edits_.clear(); liveTimer_.stop(); worker_->cancel("live:"); worker_->cancel("poll");
+                worker_->submit("disconnect", [](ptz::Camera &c) { c.disconnect(); });
+                if (previewChanged) previewChanged(false, {});
+                if (connectionChanged) connectionChanged(false, {});
+                presentSettings({});
+                for (auto &axis : axes_) configure(axis, 0, 0, 1, 0, false);
+            }
+            if (!wanted.empty() && device() == wanted && (!standalone_ || autoConnect_->isChecked()) && !connected_ && !connecting_) readCamera();
+            else if (connected_) status("Camera connected. Position updates automatically.");
+            else if (!connecting_) status(device().empty() ? "Waiting for your last camera. You can also choose another camera." : "Camera ready. Click Connect.");
         });
     });
 }
@@ -494,9 +486,7 @@ void Dock::readCamera() {
     flushLive(true); auto camera = device(); auto revision = deviceRevision_;
     if (camera.empty()) { status("Select a camera first."); return; }
     connecting_ = true;
-    if (standalone_) {
-        lastDevice_ = camera; saveConfig();
-    }
+    lastDevice_ = camera; saveConfig();
     run("read", [this, camera, revision](ptz::Camera &c) {
         tinyobs::connect(c, camera);
         auto p = c.read(); std::array<ptz::Range, 3> ranges;
@@ -548,7 +538,7 @@ void Dock::pollPosition() {
                 for (auto &axis : axes_) configure(axis, 0, 0, 1, 0, false);
                 if (connectionChanged) connectionChanged(false, qs(message));
                 if (previewChanged) previewChanged(false, {});
-                status(standalone_ ? "Camera unavailable. Waiting to reconnect." : "Camera unavailable. Reconnect to continue.", true);
+                status("Camera unavailable. Waiting to reconnect.", true);
             });
         }
     });
@@ -878,8 +868,8 @@ void Dock::recall(const ptz::Preset &preset, bool scene) {
             devices_->setCurrentIndex(index);
             presentPosition(position, ranges); presentSettings(values);
             connected_ = true; connecting_ = false;
+            lastDevice_ = preset.device; saveConfig();
             if (standalone_) {
-                lastDevice_ = preset.device; saveConfig();
                 if (connectionChanged) connectionChanged(true, devices_->currentText());
             }
             status((scene ? "Scene preset loaded: " : "Preset loaded: ") + label);
@@ -901,8 +891,8 @@ void Dock::loadConfig(const std::filesystem::path &bundledPresets) {
             auto json = document.object();
             rules_.enabled = json["sceneAutomation"].toBool();
             saveCameraSettings = json["saveCameraSettingsWithPresets"].toBool(true);
+            lastDevice_ = json["lastDevice"].toString().toStdWString();
             if (standalone_) {
-                lastDevice_ = json["lastDevice"].toString().toStdWString();
                 theme_ = json["theme"].toString("system");
                 if (theme_ != "dark" && theme_ != "light") theme_ = "system";
                 QSignalBlocker autoBlock(autoConnect_);
@@ -937,9 +927,9 @@ void Dock::loadConfig(const std::filesystem::path &bundledPresets) {
 void Dock::saveConfig() {
     try {
         auto json = dockConfiguration(store_->path(), rules_, includeSettings_->isChecked());
+        json["lastDevice"] = qs(lastDevice_);
         if (standalone_) {
             if (store_->path().parent_path() == config_.parent_path()) json["presetFile"] = fileName(store_->path().filename());
-            json["lastDevice"] = qs(lastDevice_);
             json["autoConnect"] = autoConnect_->isChecked();
             json["theme"] = theme_;
         }

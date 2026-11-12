@@ -6,6 +6,8 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFile>
+#include <QElapsedTimer>
+#include <QThread>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QLabel>
@@ -302,6 +304,40 @@ static void sceneMatchingTests(const std::filesystem::path &directory) {
     require(dock.findChild<QComboBox *>("scenePreset")->currentIndex() == 1, "name-remapped assignment survives dock recreation");
     std::cout << "PASS: cross-PC scene-name matching, UUID priority, collection isolation/rename, Unicode, inactive catalogs, deferred matches, collision protection, legacy backups and restart persistence\n";
 }
+static void rememberedCameraTests(const std::filesystem::path &directory) {
+    std::filesystem::create_directories(directory);
+    auto config = directory / L"dock.json";
+    tinyobs::Host host{[] { return std::vector<tinyobs::Scene>{}; },
+                       [] { return tinyobs::Scene{}; }, [] { return std::string{}; }};
+    {
+        tinyobs::Dock dock(config, {}, host, false);
+        auto devices = dock.findChild<QComboBox *>("cameraDevice");
+        devices->addItem("First", "offline-camera-one");
+        devices->addItem("Second", "offline-camera-two");
+        devices->setCurrentIndex(1);
+        QFile saved(QString::fromStdWString(ptz::pathText(config)));
+        require(saved.open(QIODevice::ReadOnly), "selected OBS camera saved");
+        require(QJsonDocument::fromJson(saved.readAll()).object()["lastDevice"].toString() == "offline-camera-two",
+                "OBS saves last selected camera, not the first device");
+    }
+    {
+        tinyobs::Dock dock(config, {}, host, true);
+        auto status = dock.findChild<QLabel *>("cameraStatus");
+        QElapsedTimer timer; timer.start();
+        while (!status->text().contains("Waiting for your last camera") && timer.elapsed() < 5000) {
+            QApplication::processEvents(); QThread::msleep(5);
+        }
+        require(status->text().contains("Waiting for your last camera"), "restart searches for remembered unavailable camera");
+        require(dock.findChild<QComboBox *>("cameraDevice")->currentIndex() == -1,
+                "missing remembered camera never falls back to another camera");
+        dock.findChild<QCheckBox *>("includePresetSettings")->setChecked(false);
+        QFile saved(QString::fromStdWString(ptz::pathText(config)));
+        require(saved.open(QIODevice::ReadOnly), "restarted config readable");
+        require(QJsonDocument::fromJson(saved.readAll()).object()["lastDevice"].toString() == "offline-camera-two",
+                "discovery and preference saves preserve missing camera across restart");
+    }
+    std::cout << "PASS: OBS remembered camera persistence, startup discovery and no fallback to other cameras\n";
+}
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setStyle("Fusion");
@@ -309,6 +345,7 @@ int main(int argc, char **argv) {
         workerTests(); ruleTests();
         QTemporaryDir temp;
         require(temp.isValid(), "temporary config directory");
+        rememberedCameraTests(ptz::filePath(temp.path().toStdWString()) / L"remembered-camera");
         transferTests(ptz::filePath(temp.path().toStdWString()) / L"transfer");
         configurationTests(ptz::filePath(temp.path().toStdWString()) / L"configuration");
         sceneMatchingTests(ptz::filePath(temp.path().toStdWString()) / L"scene-matching");

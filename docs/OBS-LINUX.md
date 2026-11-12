@@ -1,4 +1,4 @@
-# Tiny PTZ OBS plugin for Linux — v0.6.1
+# Tiny PTZ OBS plugin for Linux — v0.6.2
 
 Native Linux OBS dock for the OBSBOT Tiny SE: PTZ, tracking/image/device settings,
 unlimited presets, scene automation, full backups and scene-name restore matching.
@@ -39,6 +39,11 @@ if needed. The sandbox must expose the actual camera video device and sysfs USB
 descriptors. Snap/sandbox installations may similarly restrict camera access.
 
 ## Camera access and usage
+
+The dock remembers the last selected camera and connects to it when OBS starts.
+If it is unplugged or unavailable, the dock retries every four seconds without
+falling back to another camera. Select/connect your camera once after upgrading
+to establish this preference; older plugin versions did not save it.
 
 Select the Tiny SE and click **Connect / read**. The driver must be `uvcvideo`,
 and your user needs read/write access to its capture node and read access to USB

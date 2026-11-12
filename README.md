@@ -63,7 +63,7 @@ The old Win32 v0.3.4 app remains available; its guide is
 ## OBS Studio plugin
 
 The [OBS dock plugin](docs/OBS-PLUGIN.md) remains a separate package:
-`dist/TinyPTZ-OBS-v0.6.1-Windows-x64-Release.zip` for OBS 31.x / Qt 6.6.3 on Windows x64.
+`dist/TinyPTZ-OBS-v0.6.2-Windows-x64-Release.zip` for OBS 31.x / Qt 6.6.3 on Windows x64.
 It includes scene-driven preset recall, full configuration backups and scene-name
 matching when restoring on another PC. This standalone update does not replace
 the installed OBS plugin or its configuration.
@@ -71,7 +71,7 @@ the installed OBS plugin or its configuration.
 ## Build and test
 
 For the native Linux OBS plugin, see [OBS-LINUX.md](docs/OBS-LINUX.md).
-The Linux v0.6.1 backend uses V4L2/UVC, supports Windows-preset rebinding and
+The Linux v0.6.2 backend uses V4L2/UVC, supports Windows-preset rebinding and
 builds with `bash build-linux.sh --package`. The standalone preview app remains
 Windows-only. Linux runtime archives and the source archive are separate from
 the existing Windows releases.

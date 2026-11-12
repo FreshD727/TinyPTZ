@@ -1,6 +1,6 @@
-# Tiny PTZ dock for OBS Studio — v0.6.1
+# Tiny PTZ dock for OBS Studio — v0.6.2
 
-This guide describes the existing Windows release. The native Linux v0.6.1 port
+This guide describes the existing Windows release. The native Linux v0.6.2 port
 has a separate [Linux installation/build guide](OBS-LINUX.md); Windows DLLs are
 not used on Linux.
 
@@ -28,6 +28,11 @@ To uninstall, close OBS and remove the plugin DLL/data folders you installed.
 Your user presets/configuration can be kept for a later reinstall.
 
 ## Camera and settings
+
+The dock remembers the last selected camera and connects to it when OBS starts.
+If it is unplugged or unavailable, the dock retries every four seconds without
+falling back to another camera. Select/connect your camera once after upgrading
+to establish this preference; older plugin versions did not save it.
 
 Choose the Tiny SE and click **Connect / read**. The PTZ sliders apply while
 dragging, with coalesced updates about every 80 ms. Typed PTZ values apply when
