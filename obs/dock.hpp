@@ -57,7 +57,7 @@ class Dock : public QWidget {
     QTimer liveTimer_;
     QComboBox *devices_, *choices_, *scenes_, *scenePresets_;
     QCheckBox *automatic_, *includeSettings_, *sceneEnabled_;
-    QLabel *status_, *details_, *path_, *sceneStatus_;
+    QLabel *status_, *details_, *sceneStatus_;
     QListWidget *presets_;
     QTreeWidget *settingList_;
     QPushButton *apply_, *default_;
@@ -81,7 +81,6 @@ class Dock : public QWidget {
     void flushLive(bool force = false);
     void stageAxis(int index, bool final);
     void refreshPresets();
-    void openPresets();
     void transferPresets(bool importing);
     void transferConfiguration(bool importing);
     void capturePreset(bool replace);

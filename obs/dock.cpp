@@ -106,8 +106,6 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     auto rename = new QPushButton("Rename", ptzPage);
     auto remove = new QPushButton("Delete", ptzPage);
     auto boot = new QPushButton("Set boot position", ptzPage);
-    auto open = new QPushButton("Open preset file...", ptzPage);
-    auto reload = new QPushButton("Reload file", ptzPage);
     auto importButton = new QPushButton("Import presets...", ptzPage);
     importButton->setObjectName("importPresets");
     importButton->setToolTip("Merge a presets.ptz file into this library. Duplicate names get a numbered suffix.");
@@ -120,16 +118,9 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     presetButtons->addWidget(rename, 1, 1);
     presetButtons->addWidget(remove, 2, 0);
     presetButtons->addWidget(boot, 2, 1);
-    presetButtons->addWidget(open, 3, 0);
-    presetButtons->addWidget(reload, 3, 1);
-    presetButtons->addWidget(importButton, 4, 0);
-    presetButtons->addWidget(exportButton, 4, 1);
+    presetButtons->addWidget(importButton, 3, 0);
+    presetButtons->addWidget(exportButton, 3, 1);
     ptzLayout->addLayout(presetButtons);
-    path_ = new QLabel(ptzPage);
-    path_->setWordWrap(true);
-    path_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-    path_->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    ptzLayout->addWidget(path_);
     auto ptzScroll = new QScrollArea;
     ptzScroll->setWidgetResizable(true);
     ptzScroll->setWidget(ptzPage);
@@ -254,16 +245,11 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     });
     QObject::connect(capture, &QPushButton::clicked, this, [this] { capturePreset(false); });
     QObject::connect(replace, &QPushButton::clicked, this, [this] { capturePreset(true); });
-    QObject::connect(open, &QPushButton::clicked, this, [this] { openPresets(); });
     QObject::connect(backup, &QPushButton::clicked, this, [this] { transferConfiguration(false); });
     QObject::connect(restore, &QPushButton::clicked, this, [this] { transferConfiguration(true); });
     QObject::connect(includeSettings_, &QCheckBox::toggled, this, [this] { if (store_) saveConfig(); });
     QObject::connect(importButton, &QPushButton::clicked, this, [this] { transferPresets(true); });
     QObject::connect(exportButton, &QPushButton::clicked, this, [this] { transferPresets(false); });
-    QObject::connect(reload, &QPushButton::clicked, this, [this] {
-        try { store_->load(); refreshPresets(); status("Preset file reloaded."); }
-        catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
-    });
     QObject::connect(rename, &QPushButton::clicked, this, [this] {
         auto p = selectedPreset(); if (!p) return;
         bool ok = false;
@@ -569,17 +555,7 @@ void Dock::refreshPresets() {
         scenePresets_->addItem(qs(p.name) + "  (" + qs(p.device) + ")", i);
     }
     if (presets_->count()) presets_->setCurrentRow(0);
-    path_->setText(store_ ? "Preset file: " + fileName(store_->path()) : "No preset file");
     selectScene();
-}
-void Dock::openPresets() {
-    auto path = QFileDialog::getOpenFileName(this, "Open Tiny PTZ preset file", store_ ? fileName(store_->path()) : QString(), "Tiny PTZ presets (*.ptz)");
-    if (path.isEmpty()) return;
-    try {
-        auto next = std::make_unique<ptz::PresetStore>(std::filesystem::path(path.toStdWString()));
-        next->load(); store_ = std::move(next); saveConfig(); refreshPresets();
-        status("Preset file opened. Changes made here will be saved to that file.");
-    } catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
 }
 void Dock::transferPresets(bool importing) {
     if (!store_) return;

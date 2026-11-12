@@ -1,3 +1,8 @@
+Tiny PTZ OBS plugin v0.4.4 compact dock validation — 2026-11-12
+Removed the persistent preset-path label and Open preset file/Reload file buttons; import/export and full backups remain.
+PASS: existing preset, backup/restore, scene-name matching, worker, dock and actual libobs loader/lifecycle regression checks.
+Camera/protocol code is unchanged; earlier hardware evidence below is from v0.4.0.
+
 Tiny PTZ OBS plugin v0.4.3 scene-name restore validation — 2026-11-12
 PASS: changed destination UUIDs resolve by exact Unicode scene name within collection; exact UUID wins after rename.
 PASS: renamed collections resolve by globally unique UUID/name when a complete destination catalog is available.

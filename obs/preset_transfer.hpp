@@ -12,7 +12,7 @@ inline bool samePresetFile(const std::filesystem::path &a, const std::filesystem
 // Read both files afresh; only publish the merged list after atomic save succeeds.
 inline size_t importPresetFile(ptz::PresetStore &active, const std::filesystem::path &path) {
     if (!std::filesystem::exists(path)) throw std::runtime_error("The selected preset file does not exist.");
-    if (samePresetFile(active.path(), path)) throw std::runtime_error("This is already the active preset file. Use Reload file instead.");
+    if (samePresetFile(active.path(), path)) throw std::runtime_error("This is already the active preset file. Choose a different file to import.");
     ptz::PresetStore incoming(path), merged(active.path());
     incoming.load(); merged.load();
     for (auto preset : incoming.items) {

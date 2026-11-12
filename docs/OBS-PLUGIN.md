@@ -1,4 +1,4 @@
-# Tiny PTZ dock for OBS Studio — v0.4.3
+# Tiny PTZ dock for OBS Studio — v0.4.4
 
 Native Windows x64 OBS plugin for the OBSBOT Tiny SE. This package targets
 **OBS 31.x with Qt 6.6.3**, matching the local OBS 31.0.0-beta3 runtime used to
@@ -52,10 +52,10 @@ The package includes a snapshot of your existing portable presets. On first run,
 it is copied to OBS's plugin configuration folder only if no preset library exists.
 Existing plugin configuration is never replaced by installation.
 
-Use **Open preset file...** to open your current standalone
-`TinyPTZ-v0.3.4\data\presets.ptz` directly instead. This is a shared editable file:
-do not save from both applications at once. **Reload file** picks up outside edits;
-scene recalls also reload the file before resolving their preset.
+Use **Import presets...** to copy presets from your standalone
+`TinyPTZ-v0.3.4\data\presets.ptz` into the plugin library. Scene recalls reload the
+active library before resolving their preset. Previously configured external
+libraries remain supported; avoid saving from two applications at once.
 
 **Import presets...** merges a `.ptz` file into the active library. Existing
 presets and scene assignments stay intact; duplicate names for the same camera
@@ -65,8 +65,7 @@ saved settings are preserved. The imported file is not modified.
 **Export presets...** saves all presets and settings to a separate `presets.ptz`
 file that can be backed up, moved to another PC, or imported into Tiny PTZ.
 Export leaves the active library selected. Scene assignments are stored separately
-in `dock.json` and are not part of a `.ptz` export. **Open preset file...** switches
-the active library instead of merging files.
+in `dock.json` and are not part of a `.ptz` export.
 
 ## Full plugin backup and restore
 
@@ -107,7 +106,7 @@ destination scene takes priority over a pending restored assignment. Scene names
 are gathered from active scenes and saved inactive collections without switching
 OBS scenes. New assignments and scene renames keep the saved names current.
 
-**Create a fresh backup with v0.4.3 before moving it to another PC.** Older backups
+**Create a fresh backup with v0.4.3 or newer before moving it to another PC.** Older backups
 remain supported by UUID but contain no scene names to match when UUIDs change.
 Changed USB camera identities may still need updating. This backup covers this
 plugin's configuration; OBS owns the dock layout, scenes and streaming settings.
