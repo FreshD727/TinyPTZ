@@ -1,4 +1,4 @@
-# Tiny PTZ OBS plugin for Linux — v0.6.0
+# Tiny PTZ OBS plugin for Linux — v0.6.1
 
 Native Linux OBS dock for the OBSBOT Tiny SE: PTZ, tracking/image/device settings,
 unlimited presets, scene automation, full backups and scene-name restore matching.
@@ -52,7 +52,8 @@ resolved `/dev/videoN`. Log-in session ACLs or membership in the system's `video
 group normally provide access. Do not run OBS as root or make devices world-writable.
 Missing/unsupported V4L2 controls are disabled in the settings list.
 
-PTZ sliders apply live. Use **Settings** for tracking, image and device controls.
+PTZ sliders apply live. Position values refresh automatically every 400 ms while
+connected and pause while you edit. Use **Settings** for tracking, image and device controls.
 Presets include saved camera settings when the capture checkbox is enabled.
 Scene automation follows the Program scene, not Studio Mode Preview selection.
 **Back up plugin...** and **Restore plugin...** include presets and assignments;

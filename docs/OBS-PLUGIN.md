@@ -1,6 +1,6 @@
-# Tiny PTZ dock for OBS Studio — v0.4.4
+# Tiny PTZ dock for OBS Studio — v0.6.1
 
-This guide describes the existing Windows release. The native Linux v0.6.0 port
+This guide describes the existing Windows release. The native Linux v0.6.1 port
 has a separate [Linux installation/build guide](OBS-LINUX.md); Windows DLLs are
 not used on Linux.
 
@@ -12,17 +12,14 @@ The standalone Tiny PTZ application remains independently portable.
 
 ## Install
 
-Close OBS before installing. Extract this ZIP to a writable folder, then run
-PowerShell as administrator from that folder:
+Close OBS, extract the minimal Windows release ZIP, and copy its entire
+`tiny-ptz-obs` folder into `C:\ProgramData\obs-studio\plugins`.
+Replace the existing folder when upgrading from the same plugin name.
+If upgrading an old `tiny-ptz` installation, use **Back up plugin...** first,
+remove that old plugin folder, install `tiny-ptz-obs`, then restore your backup.
+Keep only one copy installed. OBS stores presets and configuration separately
+from the plugin installation.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install-obs.ps1
-```
-
-This installs the plugin under `%ProgramData%\obs-studio\plugins\tiny-ptz`.
-Pass `-ObsRoot "D:\Apps\obs-studio"` if OBS is elsewhere.
-For portable OBS, use `-Portable -ObsRoot "D:\OBS"`; alternatively copy the
-package's `obs-plugins` and `data` folders into the portable OBS root.
 No camera driver, OBSBOT Center SDK or companion process is installed.
 
 Open OBS and enable **Docks → Tiny PTZ**. Drag its title bar to dock it beside
@@ -34,7 +31,8 @@ Your user presets/configuration can be kept for a later reinstall.
 
 Choose the Tiny SE and click **Connect / read**. The PTZ sliders apply while
 dragging, with coalesced updates about every 80 ms. Typed PTZ values apply when
-editing finishes. Use **Read position** after the gimbal settles before saving.
+editing finishes. Position values refresh automatically every 400 ms while
+connected, pausing while you edit. Wait for movement to settle before saving.
 Wake and Sleep use the same repaired power commands as Tiny PTZ v0.3.4.
 
 The **Settings** tab exposes the shared core's tracking modes, human framing,
@@ -43,7 +41,7 @@ named choices and Automatic mode use **Apply selected setting**. Final numeric
 values use verified application where the setting supports readback.
 **Default selected** and **Restore image defaults** are available. Unsupported
 and read-only controls are disabled, using camera-reported ranges.
-See the included `SETTINGS.md` for model-specific coverage.
+See the source repository's `docs/SETTINGS.md` for model-specific coverage.
 
 Camera control runs on a dedicated COM STA worker. The dock never opens a preview
 graph: keep using an OBS Video Capture Device source for the image. Close other
@@ -52,7 +50,7 @@ tracking, sleep and position commands. Hardware work does not block OBS's GUI.
 
 ## Presets
 
-The package includes a snapshot of your existing portable presets. On first run,
+The minimal package includes an empty preset library. On first run,
 it is copied to OBS's plugin configuration folder only if no preset library exists.
 Existing plugin configuration is never replaced by installation.
 

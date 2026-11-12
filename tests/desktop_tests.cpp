@@ -36,10 +36,10 @@ static void uiTests(QApplication &app) {
         require(autoConnect && !autoConnect->isChecked(), "auto-connect preference restored");
         auto tabs = window.findChild<QTabWidget *>("controlTabs");
         require(tabs && !tabs->isTabVisible(2), "standalone app hides OBS scene controls");
-        bool readHidden = false;
+        bool readPresent = false;
         for (auto button : window.findChildren<QPushButton *>())
-            if (button->text() == "Read position") readHidden = button->isHidden();
-        require(readHidden && window.findChild<QLabel *>("livePositionLabel"), "manual read replaced by live position");
+            if (button->text() == "Read position") readPresent = true;
+        require(!readPresent && window.findChild<QLabel *>("livePositionLabel"), "manual read replaced by live position");
         // PreviewCanvas has no custom Qt metaobject; obtain through its QWidget name.
         auto canvasWidget = window.findChild<QWidget *>("previewCanvas");
         auto preview = static_cast<tinyapp::PreviewCanvas *>(canvasWidget);

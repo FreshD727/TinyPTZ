@@ -8,12 +8,12 @@ cmake --build "$build" --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-4}"
 QT_QPA_PLATFORM=offscreen ctest --test-dir "$build" --output-on-failure
 if [[ "${1:-}" == "--package" ]]; then
     arch="$(uname -m)"
-    parent="$root/dist/TinyPTZ-OBS-v0.6.0-Linux-$arch"
+    parent="$root/dist/TinyPTZ-OBS-v0.6.1-Linux-$arch"
     stage="$parent/tiny-ptz-obs"
     cmake --install "$build" --prefix "$stage"
     strip --strip-unneeded "$stage/bin/64bit/tiny-ptz-obs.so"
-    archive="$root/dist/TinyPTZ-OBS-v0.6.0-Linux-$arch-Release.tar.gz"
+    archive="$root/dist/TinyPTZ-OBS-v0.6.1-Linux-$arch-Release.tar.gz"
     tar -czf "$archive" -C "$parent" tiny-ptz-obs
-    (cd "$parent" && cmake -E tar cf "$root/dist/TinyPTZ-OBS-v0.6.0-Linux-$arch-Release.zip" --format=zip tiny-ptz-obs)
+    (cd "$parent" && cmake -E tar cf "$root/dist/TinyPTZ-OBS-v0.6.1-Linux-$arch-Release.zip" --format=zip tiny-ptz-obs)
     printf '\nLinux plugin: %s\n' "$archive"
 fi

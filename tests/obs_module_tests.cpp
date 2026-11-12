@@ -15,6 +15,7 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
 #include <QSlider>
+#include <QSignalBlocker>
 #include <obs-frontend-api.h>
 #ifdef _WIN32
 #define TINY_TEST_IMPORT __declspec(dllimport)
@@ -114,6 +115,11 @@ int main(int argc, char **argv) {
             devices->setCurrentIndex(devices->findData(QString::fromStdWString(restore.original.device)));
             dock->findChild<QPushButton *>("connectCamera")->click();
             require(wait([&] { return status->text().contains("Camera connected"); }), "dock camera worker reads hardware");
+            auto panNumber = dock->findChild<QDoubleSpinBox *>("panNumber");
+            auto actualPan = panNumber->value();
+            { QSignalBlocker block(panNumber); panNumber->setValue(actualPan == panNumber->minimum() ? panNumber->maximum() : panNumber->minimum()); }
+            require(wait([&] { return panNumber->value() == actualPan; }), "OBS dock automatically refreshes measured position");
+            std::cout << "PASS: OBS dock live position readback without a Read position button\n";
             auto tree = dock->findChild<QTreeWidget *>("cameraSettings");
             QTreeWidgetItem *brightness = nullptr;
             for (QTreeWidgetItemIterator i(tree); *i; ++i)

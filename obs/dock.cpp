@@ -96,13 +96,10 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
                          [this, axis] { if (!updating_) { stageAxis(axis, true); flushLive(); } });
     }
     ptzLayout->addLayout(grid);
-    auto readPosition = new QPushButton("Read position", ptzPage);
-    ptzLayout->addWidget(readPosition);
+    auto live = new QLabel("Live camera position", ptzPage);
+    live->setObjectName("livePositionLabel");
+    ptzLayout->addWidget(live);
     if (standalone_) {
-        readPosition->hide();
-        auto live = new QLabel("Live camera position", ptzPage);
-        live->setObjectName("livePositionLabel");
-        ptzLayout->addWidget(live);
         search_ = new QLineEdit(ptzPage);
         search_->setObjectName("presetSearch");
         search_->setPlaceholderText("Search presets");
@@ -254,7 +251,6 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     QObject::connect(&liveTimer_, &QTimer::timeout, this, [this] { flushLive(); });
     QObject::connect(rescan, &QPushButton::clicked, this, [this] { discover(); });
     QObject::connect(read, &QPushButton::clicked, this, [this] { readCamera(); });
-    QObject::connect(readPosition, &QPushButton::clicked, this, [this] { readCamera(); });
     QObject::connect(readSettingsButton, &QPushButton::clicked, this, [this] { readSettings(); });
     QObject::connect(devices_, &QComboBox::currentIndexChanged, this, [this] {
         ++deviceRevision_;
@@ -385,14 +381,14 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     QObject::connect(assign, &QPushButton::clicked, this, [this] { assignScene(); });
     loadConfig(bundledPresets);
     refreshPresets(); refreshScenes();
+    positionTimer_.setInterval(400);
+    QObject::connect(&positionTimer_, &QTimer::timeout, this, [this] { pollPosition(); });
+    positionTimer_.start();
     if (standalone_) {
         QObject::connect(autoConnect_, &QCheckBox::toggled, this, [this](bool enabled) {
             saveConfig(); if (enabled && !connected_ && !connecting_ && !device().empty()) readCamera();
         });
         QObject::connect(search_, &QLineEdit::textChanged, this, [this] { filterPresets(); });
-        positionTimer_.setInterval(400);
-        QObject::connect(&positionTimer_, &QTimer::timeout, this, [this] { pollPosition(); });
-        positionTimer_.start();
         reconnectTimer_.setInterval(4000);
         QObject::connect(&reconnectTimer_, &QTimer::timeout, this, [this] {
             if (!connected_ && !connecting_ && autoConnect_->isChecked() && !lastDevice_.empty()) discover();
@@ -496,9 +492,10 @@ void Dock::discover() {
 }
 void Dock::readCamera() {
     flushLive(true); auto camera = device(); auto revision = deviceRevision_;
+    if (camera.empty()) { status("Select a camera first."); return; }
+    connecting_ = true;
     if (standalone_) {
-        if (camera.empty()) { status("Select a camera first."); return; }
-        lastDevice_ = camera; connecting_ = true; saveConfig();
+        lastDevice_ = camera; saveConfig();
     }
     run("read", [this, camera, revision](ptz::Camera &c) {
         tinyobs::connect(c, camera);
@@ -521,13 +518,18 @@ void Dock::presentPosition(ptz::Position p, std::array<ptz::Range, 3> ranges) {
                   values[i], ranges[i].supported);
 }
 void Dock::pollPosition() {
-    if (!standalone_ || stopped_ || !connected_ || connecting_ || pollPending_ || !edits_.empty()) return;
+    if (stopped_ || !connected_ || connecting_ || pollPending_ || !edits_.empty()) return;
     for (auto &axis : axes_) if (axis.slider->isSliderDown() || axis.number->hasFocus()) return;
     auto camera = device(); auto revision = deviceRevision_; auto positionRevision = positionRevision_;
     pollPending_ = true;
     worker_->submit("poll", [this, camera, revision, positionRevision](ptz::Camera &c) {
         try {
-            if (!c.connected() || c.id() != camera) throw std::runtime_error("Camera disconnected.");
+            if (!c.connected()) throw std::runtime_error("Camera disconnected.");
+            if (c.id() != camera) {
+                // A preset may have switched cameras before its UI callback.
+                post([this, revision] { if (revision == deviceRevision_) pollPending_ = false; });
+                return;
+            }
             auto position = c.read();
             post([this, position, revision, positionRevision] {
                 if (revision != deviceRevision_) return;
@@ -546,7 +548,7 @@ void Dock::pollPosition() {
                 for (auto &axis : axes_) configure(axis, 0, 0, 1, 0, false);
                 if (connectionChanged) connectionChanged(false, qs(message));
                 if (previewChanged) previewChanged(false, {});
-                status("Camera unavailable. Waiting to reconnect.", true);
+                status(standalone_ ? "Camera unavailable. Waiting to reconnect." : "Camera unavailable. Reconnect to continue.", true);
             });
         }
     });
@@ -875,8 +877,9 @@ void Dock::recall(const ptz::Preset &preset, bool scene) {
             if (index < 0) { devices_->addItem("Preset camera", qs(preset.device)); index = devices_->count() - 1; }
             devices_->setCurrentIndex(index);
             presentPosition(position, ranges); presentSettings(values);
+            connected_ = true; connecting_ = false;
             if (standalone_) {
-                connected_ = true; connecting_ = false; lastDevice_ = preset.device; saveConfig();
+                lastDevice_ = preset.device; saveConfig();
                 if (connectionChanged) connectionChanged(true, devices_->currentText());
             }
             status((scene ? "Scene preset loaded: " : "Preset loaded: ") + label);
