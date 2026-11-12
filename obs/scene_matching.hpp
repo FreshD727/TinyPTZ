@@ -1,5 +1,6 @@
 #pragma once
 #include "scene_rules.hpp"
+#include "platform.hpp"
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -17,7 +18,7 @@ struct SceneCatalog {
 // The current collection is replaced by live frontend data by the caller.
 inline SceneCatalog readSceneCatalog(const std::filesystem::path &folder) {
     SceneCatalog result;
-    QDir directory(QString::fromStdWString(folder.wstring()));
+    QDir directory(QString::fromStdWString(ptz::pathText(folder)));
     if (!directory.exists() || !directory.isReadable()) return result;
     result.complete = true;
     for (auto &entry : directory.entryInfoList({"*.json"}, QDir::Files)) {

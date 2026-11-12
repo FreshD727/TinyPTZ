@@ -29,13 +29,15 @@ static void workerTests() {
     std::vector<int> values;
     std::promise<void> done;
     std::atomic<int> errors{0};
-    DWORD caller = GetCurrentThreadId(), workerThread = 0;
+    auto caller = std::this_thread::get_id(); std::thread::id workerThread;
     tinyobs::CameraWorker worker([&](const std::string &) { ++errors; });
     worker.submit("barrier", [&](ptz::Camera &) {
-        workerThread = GetCurrentThreadId();
+        workerThread = std::this_thread::get_id();
+#ifdef _WIN32
         APTTYPE type; APTTYPEQUALIFIER qualifier;
         require(SUCCEEDED(CoGetApartmentType(&type, &qualifier)) && (type == APTTYPE_STA || type == APTTYPE_MAINSTA),
                 "camera worker must own an STA");
+#endif
         std::unique_lock<std::mutex> lock(mutex); entered = true; cv.notify_all();
         cv.wait(lock, [&] { return release; });
     });
@@ -77,7 +79,7 @@ static void transferTests(const std::filesystem::path &directory) {
     active.save();
     incoming.items = {{L"Wide", L"camera-a", {-17, -4, 3}, {{"composition_x", .15, false}, {"exposure", -5, true}}},
                       {L"Wide", L"camera-b", {0, 1, 2}, {}},
-                      {L"Küche", L"camera-a", {1, 2, 3}, {}}};
+                      {L"KÃƒÂ¼che", L"camera-a", {1, 2, 3}, {}}};
     incoming.save();
     auto read = [](const std::filesystem::path &path) {
         std::ifstream file(path, std::ios::binary);
@@ -89,7 +91,7 @@ static void transferTests(const std::filesystem::path &directory) {
             active.items[2].name == L"Wide (3)" && active.items[3].name == L"Wide",
             "import preserves existing presets and resolves same-camera name collisions");
     require(active.items[2].position.tilt == -4 && active.items[2].settings[0].value == .15 &&
-            active.items[2].settings[1].automatic && active.items[4].name == L"Küche",
+            active.items[2].settings[1].automatic && active.items[4].name == L"KÃƒÂ¼che",
             "import preserves negative coordinates, fractional settings, auto mode and Unicode");
     require(read(incoming.path()) == sourceBytes, "import never edits source library");
     auto original = read(active.path());
@@ -111,16 +113,24 @@ static void transferTests(const std::filesystem::path &directory) {
     ptz::PresetStore exported(exportedPath); exported.load();
     require(exported.items.size() == 6 && exported.items[2].settings[1].automatic &&
             exported.items.back().name == L"External edit", "export roundtrip preserves full library and settings");
+    std::vector<ptz::Preset> moved{{L"Wide",L"windows-camera",{17,-4,3},{{"exposure",-5,true}}},
+                                  {L"Wide",L"/dev/v4l/by-id/linux-camera",{0,0,0},{}}};
+    tinyobs::SceneRules rebound; rebound.enabled=true;
+    rebound.collections["Show"]["scene"]={L"windows-camera",L"Wide"};
+    require(tinyobs::rebindPresets(moved,rebound,L"windows-camera",L"/dev/v4l/by-id/linux-camera")==1 &&
+            moved[0].name==L"Wide (2)" && moved[0].position.tilt==-4 && moved[0].settings[0].automatic &&
+            rebound.lookup("Show","scene")->device==L"/dev/v4l/by-id/linux-camera" &&
+            rebound.lookup("Show","scene")->name==L"Wide (2)", "Windows/Linux camera rebinding preserves settings and updates scene references without name collisions");
     std::cout << "PASS: preset import/export, collisions, Unicode/settings roundtrip, current disk state, source preservation and invalid/self-file rejection\n";
 }
 static void configurationTests(const std::filesystem::path &directory) {
     std::filesystem::create_directories(directory);
     ptz::PresetStore original(directory / L"external.ptz");
-    original.items = {{L"Küche", L"camera-a", {17, -4, 3}, {{"composition_x", .15, false}, {"exposure", -5, true}}}};
+    original.items = {{L"KÃƒÂ¼che", L"camera-a", {17, -4, 3}, {{"composition_x", .15, false}, {"exposure", -5, true}}}};
     original.save();
     tinyobs::SceneRules rules; rules.enabled = true;
-    rules.collections["Main collection"]["scene-uuid"] = {L"camera-a", L"Küche"};
-    rules.collections["Second collection"]["other-uuid"] = {L"camera-a", L"Küche"};
+    rules.collections["Main collection"]["scene-uuid"] = {L"camera-a", L"KÃƒÂ¼che"};
+    rules.collections["Second collection"]["other-uuid"] = {L"camera-a", L"KÃƒÂ¼che"};
     rules.sceneNames["Main collection"]["scene-uuid"] = "My scene";
     rules.sceneNames["Second collection"]["other-uuid"] = "Second scene";
     auto config = directory / L"dock.json";
@@ -132,11 +142,11 @@ static void configurationTests(const std::filesystem::path &directory) {
     auto path = directory / L"full.tinyptz.json";
     tinyobs::exportConfiguration(original, config, rules, false, path);
     auto loaded = tinyobs::readConfigurationBackup(path);
-    require(loaded.presets.size() == 1 && loaded.presets[0].name == L"Küche" &&
+    require(loaded.presets.size() == 1 && loaded.presets[0].name == L"KÃƒÂ¼che" &&
             loaded.presets[0].position.tilt == -4 && loaded.presets[0].settings[0].value == .15 &&
             loaded.presets[0].settings[1].automatic, "full backup includes exact PTZ/settings and Unicode");
     require(loaded.rules.enabled && !loaded.saveCameraSettings &&
-            loaded.rules.lookup("Main collection", "scene-uuid")->name == L"Küche" &&
+            loaded.rules.lookup("Main collection", "scene-uuid")->name == L"KÃƒÂ¼che" &&
             loaded.rules.lookup("Second collection", "other-uuid")->device == L"camera-a",
             "backup includes automation, preferences and assignments in every collection");
     require(loaded.rules.sceneNames["Main collection"]["scene-uuid"] == "My scene", "backup retains scene names for another PC");
@@ -171,7 +181,7 @@ static void configurationTests(const std::filesystem::path &directory) {
     };
     reject([&] { tinyobs::exportConfiguration(original, config, rules, false, config); });
     reject([&] { tinyobs::exportConfiguration(original, config, rules, false, original.path()); });
-    QFile good(QString::fromStdWString(path.wstring())); good.open(QIODevice::ReadOnly);
+    QFile good(QString::fromStdWString(ptz::pathText(path))); good.open(QIODevice::ReadOnly);
     auto json = QJsonDocument::fromJson(good.readAll()).object(); good.close();
     auto invalid = directory / L"invalid.tinyptz.json";
     auto checkInvalid = [&](const QJsonObject &bad) {
@@ -204,11 +214,11 @@ static void sceneMatchingTests(const std::filesystem::path &directory) {
     tinyobs::PresetId original{L"camera-a", L"Wide"}, other{L"camera-a", L"Close"};
     tinyobs::SceneRules rules; rules.enabled = true;
     rules.collections["Show"]["old-uuid"] = original;
-    rules.sceneNames["Show"]["old-uuid"] = "Küche";
+    rules.sceneNames["Show"]["old-uuid"] = "KÃƒÂ¼che";
     tinyobs::SceneCatalog destination;
     destination.complete = true;
-    destination.collections["Show"]["new-uuid"] = "Küche";
-    destination.collections["Other"]["unrelated-uuid"] = "Küche";
+    destination.collections["Show"]["new-uuid"] = "KÃƒÂ¼che";
+    destination.collections["Other"]["unrelated-uuid"] = "KÃƒÂ¼che";
     auto ordinary = rules;
     auto unchanged = tinyobs::resolveSceneAssignments(ordinary, destination);
     require(!unchanged.changed && !ordinary.lookup("Show", "new-uuid"), "ordinary new scenes do not inherit assignments outside restore");
@@ -217,7 +227,7 @@ static void sceneMatchingTests(const std::filesystem::path &directory) {
             !rules.lookup("Show", "old-uuid") && !rules.lookup("Other", "unrelated-uuid"),
             "another PC: same-collection exact name maps a changed UUID without crossing collections");
     destination.collections["Show"]["new-uuid"] = "Renamed scene";
-    destination.collections["Show"]["another-uuid"] = "Küche";
+    destination.collections["Show"]["another-uuid"] = "KÃƒÂ¼che";
     report = tinyobs::resolveSceneAssignments(rules, destination, true);
     require(report.uuid == 1 && !report.name && rules.lookup("Show", "new-uuid") == original,
             "UUID wins over stale names when a scene was renamed");
@@ -299,10 +309,10 @@ int main(int argc, char **argv) {
         workerTests(); ruleTests();
         QTemporaryDir temp;
         require(temp.isValid(), "temporary config directory");
-        transferTests(std::filesystem::path(temp.path().toStdWString()) / L"transfer");
-        configurationTests(std::filesystem::path(temp.path().toStdWString()) / L"configuration");
-        sceneMatchingTests(std::filesystem::path(temp.path().toStdWString()) / L"scene-matching");
-        auto config = std::filesystem::path(temp.path().toStdWString()) / L"dock.json";
+        transferTests(ptz::filePath(temp.path().toStdWString()) / L"transfer");
+        configurationTests(ptz::filePath(temp.path().toStdWString()) / L"configuration");
+        sceneMatchingTests(ptz::filePath(temp.path().toStdWString()) / L"scene-matching");
+        auto config = ptz::filePath(temp.path().toStdWString()) / L"dock.json";
         auto library = config.parent_path() / L"saved.ptz";
         ptz::PresetStore presets(library);
         presets.items = {{L"Wide", L"offline-test-camera", {17, -4, 0}, {}}}; presets.save();
@@ -323,7 +333,7 @@ int main(int argc, char **argv) {
             auto target = dock.findChild<QComboBox *>("scenePreset");
             target->setCurrentIndex(1);
             dock.findChild<QPushButton *>("saveSceneAssignment")->click();
-            QFile file(QString::fromStdWString(config.wstring()));
+            QFile file(QString::fromStdWString(ptz::pathText(config)));
             require(file.open(QIODevice::ReadOnly), "dock config saved");
             auto json = QJsonDocument::fromJson(file.readAll()).object();
             require(json["assignments"].toArray().size() == 1, "scene assignment persisted");
@@ -373,7 +383,7 @@ int main(int argc, char **argv) {
             require(dock.findChild<QComboBox *>("scenePreset")->currentIndex() == 1, "assignment survives dock recreation");
             require(!dock.findChild<QCheckBox *>("sceneAutomation")->isChecked(), "automation state survives restart");
         }
-        std::cout << "PASS: COM worker ownership, live-job coalescing, stale recall cancellation, error recovery, scene UUID/collection isolation, rename/delete rules, preset import, configuration roundtrip, negative/fractional controls, unsupported settings and shutdown\n";
+        std::cout << "PASS: camera worker ownership, live-job coalescing, stale recall cancellation, error recovery, scene UUID/collection isolation, rename/delete rules, preset import, configuration roundtrip, negative/fractional controls, unsupported settings and shutdown\n";
         return 0;
     } catch (const std::exception &e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

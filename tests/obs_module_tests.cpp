@@ -16,15 +16,20 @@
 #include <QTreeWidgetItemIterator>
 #include <QSlider>
 #include <obs-frontend-api.h>
+#ifdef _WIN32
+#define TINY_TEST_IMPORT __declspec(dllimport)
+#else
+#define TINY_TEST_IMPORT
+#endif
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <algorithm>
 #include <iostream>
-extern "C" __declspec(dllimport) void tiny_test_setup(QMainWindow *, obs_source_t *, obs_source_t *);
-extern "C" __declspec(dllimport) void tiny_test_scene(obs_source_t *);
-extern "C" __declspec(dllimport) void tiny_test_event(obs_frontend_event);
+extern "C" TINY_TEST_IMPORT void tiny_test_setup(QMainWindow *, obs_source_t *, obs_source_t *);
+extern "C" TINY_TEST_IMPORT void tiny_test_scene(obs_source_t *);
+extern "C" TINY_TEST_IMPORT void tiny_test_event(obs_frontend_event);
 static void require(bool value, const char *message) { if (!value) throw std::runtime_error(message); }
 static bool wait(const std::function<bool()> &condition, int timeout = 8000) {
     QElapsedTimer timer; timer.start();
@@ -67,7 +72,7 @@ int main(int argc, char **argv) {
         bool hardware = argc == 3 && std::string(argv[2]) == "--hardware";
         QTemporaryDir temp;
         auto directory = temp.path().toUtf8().toStdString();
-        std::ofstream(std::filesystem::path(temp.path().toStdWString()) / L"presets.ptz") <<
+        std::ofstream(ptz::filePath(temp.path().toStdWString()) / L"presets.ptz") <<
             "TINY_PTZ_PRESETS 2\n\"Module test preset\" \"offline-test-camera\" 17 -4 0 0\n";
         require(obs_startup("en-US", directory.c_str(), nullptr), "installed libobs startup");
         RestoreCamera restore;
@@ -79,7 +84,7 @@ int main(int argc, char **argv) {
             restore.sleeping = camera.sleeping();
             restore.original = {L"Module hardware test", found->id, camera.read(), camera.snapshotSettings()};
             restore.armed = true;
-            ptz::PresetStore store(std::filesystem::path(temp.path().toStdWString()) / L"presets.ptz");
+            ptz::PresetStore store(ptz::filePath(temp.path().toStdWString()) / L"presets.ptz");
             store.items = {restore.original}; store.save();
         }
         auto a = obs_scene_create("Camera scene"); auto b = obs_scene_create("Other scene");

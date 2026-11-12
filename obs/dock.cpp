@@ -35,7 +35,7 @@ namespace tinyobs {
 static QString qs(const std::wstring &text) { return QString::fromStdWString(text); }
 static QString qs(const std::string &text) { return QString::fromUtf8(text.c_str()); }
 static std::string bytes(const QString &text) { return text.toUtf8().toStdString(); }
-static QString fileName(const std::filesystem::path &path) { return qs(path.wstring()); }
+static QString fileName(const std::filesystem::path &path) { return qs(ptz::pathText(path)); }
 static PresetId id(const ptz::Preset &p) { return {p.device, p.name}; }
 static constexpr long properties[] = {CameraControl_Pan, CameraControl_Tilt, CameraControl_Zoom};
 
@@ -138,6 +138,13 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     presetButtons->addWidget(boot, 2, 1);
     presetButtons->addWidget(importButton, 3, 0);
     presetButtons->addWidget(exportButton, 3, 1);
+#ifndef _WIN32
+    auto assignCamera = new QPushButton("Assign presets to camera...", ptzPage);
+    assignCamera->setObjectName("assignPresetCamera");
+    assignCamera->setToolTip("Rebind imported Windows presets or a changed USB identity to the selected Linux camera.");
+    presetButtons->addWidget(assignCamera, 4, 0, 1, 2);
+    QObject::connect(assignCamera, &QPushButton::clicked, this, [this] { assignPresetCamera(); });
+#endif
     ptzLayout->addLayout(presetButtons);
     auto ptzScroll = new QScrollArea;
     ptzScroll->setWidgetResizable(true);
@@ -741,7 +748,7 @@ void Dock::transferPresets(bool importing) {
     if (!importing) dialog.selectFile("presets.ptz");
     if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
     try {
-        auto path = std::filesystem::path(dialog.selectedFiles().first().toStdWString());
+        auto path = ptz::filePath(dialog.selectedFiles().first().toStdWString());
         if (importing) {
             auto count = importPresetFile(*store_, path);
             refreshPresets();
@@ -763,7 +770,7 @@ void Dock::transferConfiguration(bool importing) {
     if (!importing) dialog.selectFile("tiny-ptz-backup.tinyptz.json");
     if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
     try {
-        auto path = std::filesystem::path(dialog.selectedFiles().first().toStdWString());
+        auto path = ptz::filePath(dialog.selectedFiles().first().toStdWString());
         if (!importing) {
             rememberSceneNames(rules_, sceneCatalog());
             exportConfiguration(*store_, config_, rules_, includeSettings_->isChecked(), path);
@@ -796,6 +803,28 @@ void Dock::transferConfiguration(bool importing) {
         status(QString("Restored: %1 UUID matches, %2 name matches, %3 unresolved. Automation resumes on the next Program scene change.")
                    .arg(matches.uuid).arg(matches.name).arg(matches.unresolved));
     } catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
+}
+void Dock::assignPresetCamera() {
+    if (!store_ || device().empty()) { status("Select the destination camera first.", true); return; }
+    try {
+        ptz::PresetStore fresh(store_->path()); fresh.load();
+        QStringList identities;
+        for (auto &p : fresh.items) if (p.device != device() && !identities.contains(qs(p.device))) identities.append(qs(p.device));
+        if (identities.isEmpty()) { status("All presets already use the selected camera."); return; }
+        bool ok = false;
+        auto source = QInputDialog::getItem(this,"Assign presets to camera","Original camera identity",identities,0,false,&ok);
+        if (!ok) return;
+        ConfigurationBackup next;
+        next.presets = std::move(fresh.items); next.rules = rules_; next.saveCameraSettings = includeSettings_->isChecked();
+        auto count = rebindPresets(next.presets,next.rules,source.toStdWString(),device());
+        auto message = QString("Assign %1 presets to %2?\n\nTheir saved settings and scene assignments are preserved. Duplicate names get numbered suffixes. The old preset file is kept unchanged; no camera movement is triggered.").arg(count).arg(devices_->currentText());
+        if (QMessageBox::question(this,"Assign presets to camera",message,QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes) return;
+        auto restored = restoreConfiguration(config_,next);
+        ++*sceneGeneration_; worker_->cancel("recall");
+        store_ = std::move(restored); rules_ = std::move(next.rules);
+        refreshPresets();
+        status(QString("%1 presets assigned to the selected camera.").arg(count));
+    } catch (const std::exception &e) { status(qs(std::string(e.what())),true); }
 }
 void Dock::capturePreset(bool replace) {
     auto camera = device();
@@ -878,7 +907,7 @@ void Dock::loadConfig(const std::filesystem::path &bundledPresets) {
             }
             auto path = json["presetFile"].toString();
             if (!path.isEmpty()) {
-                presetPath = path.toStdWString();
+                presetPath = ptz::filePath(path.toStdWString());
                 if (presetPath.is_relative()) presetPath = config_.parent_path() / presetPath;
             }
             for (auto entry : json["assignments"].toArray()) {

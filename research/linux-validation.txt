@@ -1,0 +1,12 @@
+Tiny PTZ Linux OBS plugin v0.6.0 validation — 2026-11-12
+Build: Ubuntu 24.04.4 WSL2, x86_64, GCC 13, glibc 2.39, libobs 30.0.2.1, Qt 6.4.2.
+PASS: CMake/Ninja Release build and CTest 4/4: core, mocked Linux V4L2/UVC backend, shared Qt dock, actual libobs module loader.
+PASS: stripped release .so loads in the isolated libobs/Qt frontend fixture; scene/preview events, UUID persistence and shutdown.
+PASS: ldd resolves runtime dependencies from native distro libraries; no test frontend/runtime SDK is packaged.
+PASS: Windows OBS build and module regression tests after shared-core portability changes.
+PASS: minimal ZIP/tar folder structure; only the ELF plugin, empty preset library, README and license.
+PASS: Windows-to-Linux preset rebinding preserves settings/positions and updates scene references with collision handling.
+LIMIT: no physical Tiny SE was attached to Linux/WSL; V4L2 mappings use mocked ioctl coverage. Actual UVC transfers, native OBS GUI and capture sharing need target Linux hardware validation.
+Windows camera packet fixtures and earlier Windows hardware tests remain prior evidence only; they are not Linux hardware validation.
+PASS: clean extraction of the downloadable source archive builds and installs the Linux module and required runtime files.
+PASS: Windows standalone Qt build/preferences/preview-host regression tests after shared-core changes.

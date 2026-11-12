@@ -318,4 +318,48 @@ std::filesystem::path portableData() {
     p.resize(n);
     return std::filesystem::path(p).parent_path() / L"data" / L"presets.ptz";
 }
+Range Camera::standardRange(bool image, int property, long &support) const {
+    Range r;
+    HRESULT hr = image ? (procamp_ ? procamp_->GetRange(property, &r.min, &r.max, &r.step, &r.normal, &support) : E_NOINTERFACE)
+                       : (control_ ? control_->GetRange(property, &r.min, &r.max, &r.step, &r.normal, &support) : E_NOINTERFACE);
+    check(hr, "Read camera setting range"); r.supported = true; return r;
+}
+long Camera::standardRead(bool image, int property, long &flags) const {
+    long value = 0;
+    check(image ? (procamp_ ? procamp_->Get(property, &value, &flags) : E_NOINTERFACE)
+                : (control_ ? control_->Get(property, &value, &flags) : E_NOINTERFACE), "Read camera setting");
+    return value;
+}
+void Camera::standardWrite(bool image, int property, long value, bool automatic) {
+    check(image ? (procamp_ ? procamp_->Set(property, value, automatic ? 1 : 2) : E_NOINTERFACE)
+                : (control_ ? control_->Set(property, value, automatic ? 1 : 2) : E_NOINTERFACE), "Write camera setting");
+}
+void Camera::setAntiFlicker(long value) {
+                ComPtr<IKsTopologyInfo> topology;
+                HRESULT hr = filter_.As(&topology);
+                DWORD count = 0;
+                bool done = false;
+                if (SUCCEEDED(hr))
+                    topology->get_NumNodes(&count);
+                for (DWORD node = 0; node < count; ++node) {
+                    ComPtr<IVideoProcAmp> proc;
+                    if (FAILED(topology->CreateNodeInstance(node, __uuidof(IVideoProcAmp),
+                                                            (void **)proc.GetAddressOf())))
+                        continue;
+                    long lo = 0, hi = 0, step = 0, normal = 0, caps = 0;
+                    if (FAILED(proc->getRange_PowerlineFrequency(&lo, &hi, &step, &normal, &caps)))
+                        continue;
+                    hr = proc->put_PowerlineFrequency(value, 2);
+                    if (SUCCEEDED(hr)) {
+                        done = true;
+                        break;
+                    }
+                }
+                if (!done) {
+                    std::ostringstream error;
+                    error << "Camera rejected anti-flicker setting (0x" << std::hex
+                          << (unsigned long)hr << ")";
+                    throw std::runtime_error(error.str());
+                }
+}
 } // namespace ptz

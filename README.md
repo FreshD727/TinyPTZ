@@ -70,6 +70,12 @@ the installed OBS plugin or its configuration.
 
 ## Build and test
 
+For the native Linux OBS plugin, see [OBS-LINUX.md](docs/OBS-LINUX.md).
+The Linux v0.6.0 backend uses V4L2/UVC, supports Windows-preset rebinding and
+builds with `bash build-linux.sh --package`. The standalone preview app remains
+Windows-only. Linux runtime archives and the source archive are separate from
+the existing Windows releases.
+
 Use Windows x64, Visual Studio C++ Build Tools and the Windows SDK. First setup:
 
 ```powershell

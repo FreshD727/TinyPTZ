@@ -6,7 +6,9 @@
 #include <cstring>
 #include <sstream>
 #include <thread>
+#ifdef _WIN32
 #include <vidcap.h>
+#endif
 namespace ptz {
 namespace {
 enum class Backend { Camera, Image, Raw, Ai, Scalar, Block, ReadOnly, Applied };
@@ -232,6 +234,7 @@ std::vector<unsigned char> floatData(double value) {
     return b;
 }
 } // namespace
+#ifdef _WIN32
 std::vector<unsigned char> Camera::extension(ULONG selector, bool write,
                                              std::vector<unsigned char> data) {
     discoverExtension();
@@ -254,6 +257,7 @@ std::vector<unsigned char> Camera::extension(ULONG selector, bool write,
     }
     return data;
 }
+#endif
 std::vector<unsigned char> Camera::request(unsigned short command, bool write,
                                            const std::vector<unsigned char> &payload,
                                            bool waitForReply) {
@@ -350,20 +354,9 @@ std::vector<Setting> Camera::settings(const std::string &onlyKey) {
         try {
             if (d.backend == Backend::Camera || d.backend == Backend::Image) {
                 long lo = 0, hi = 0, step = 0, normal = 0, support = 0, value = 0, flags = 0;
-                HRESULT hr =
-                    d.backend == Backend::Camera
-                        ? (control_
-                               ? control_->GetRange(d.property, &lo, &hi, &step, &normal, &support)
-                               : E_NOINTERFACE)
-                        : (procamp_
-                               ? procamp_->GetRange(d.property, &lo, &hi, &step, &normal, &support)
-                               : E_NOINTERFACE);
-                if (FAILED(hr))
-                    throw std::runtime_error("Not supported by this camera driver");
-                hr = d.backend == Backend::Camera ? control_->Get(d.property, &value, &flags)
-                                                  : procamp_->Get(d.property, &value, &flags);
-                if (FAILED(hr))
-                    throw std::runtime_error("Camera could not read this setting");
+                auto driverRange = standardRange(d.backend == Backend::Image, d.property, support);
+                lo = driverRange.min; hi = driverRange.max; step = driverRange.step; normal = driverRange.normal;
+                value = standardRead(d.backend == Backend::Image, d.property, flags);
                 s.defaultValue = {d.key, (double)normal, (support & 1) != 0};
                 s.defaultAvailable = true;
                 s.current.value = value;
@@ -467,8 +460,8 @@ std::string Camera::positionDiagnostics() {
     auto b = request(0x6604, false);
     auto angles = decodeMotorAngles(b);
     long pan = 0, tilt = 0, flags = 0;
-    control_->Get(CameraControl_Pan, &pan, &flags);
-    control_->Get(CameraControl_Tilt, &tilt, &flags);
+    pan = standardRead(false, CameraControl_Pan, flags);
+    tilt = standardRead(false, CameraControl_Tilt, flags);
     auto p = read();
     std::ostringstream out;
     out << "driver " << pan << " " << tilt << " " << p.zoom << "\n";
@@ -603,23 +596,16 @@ void Camera::applySetting(const SettingValue &v, bool verify) {
     wake(true);
     if (d.backend == Backend::Camera || d.backend == Backend::Image) {
         long lo = 0, hi = 0, step = 0, normal = 0, flags = 0;
-        HRESULT hr =
-            d.backend == Backend::Camera
-                ? control_->GetRange(d.property, &lo, &hi, &step, &normal, &flags)
-                : (procamp_ ? procamp_->GetRange(d.property, &lo, &hi, &step, &normal, &flags)
-                            : E_NOINTERFACE);
-        if (FAILED(hr) || !(flags & (v.automatic ? 1 : 2)))
+        auto driverRange = standardRange(d.backend == Backend::Image, d.property, flags);
+        lo = driverRange.min; hi = driverRange.max; step = driverRange.step; normal = driverRange.normal;
+        if (!(flags & (v.automatic ? 1 : 2)))
             throw std::runtime_error("Requested manual/automatic mode is unsupported");
         double driverValue = v.value + (v.key == "exposure_compensation" ? 9 : 0);
         if (!v.automatic &&
             (driverValue < lo || driverValue > hi || std::floor(driverValue) != driverValue ||
              ((long)driverValue - lo) % std::max(1L, step) != 0))
             throw std::runtime_error("Setting is outside the driver range/step");
-        hr = d.backend == Backend::Camera
-                 ? control_->Set(d.property, (long)driverValue, v.automatic ? 1 : 2)
-                 : procamp_->Set(d.property, (long)driverValue, v.automatic ? 1 : 2);
-        if (FAILED(hr))
-            throw std::runtime_error("Camera rejected image setting");
+        standardWrite(d.backend == Backend::Image, d.property, (long)driverValue, v.automatic);
     } else {
         if (d.backend == Backend::ReadOnly || v.value < d.min || v.value > d.max ||
             (d.step >= 1 && std::floor(v.value) != v.value))
@@ -631,32 +617,7 @@ void Camera::applySetting(const SettingValue &v, bool verify) {
                 std::memcpy(bytes.data(), &value, 4);
                 request(d.set, true, bytes, verify);
             } else if (v.key == "anti_flicker") {
-                ComPtr<IKsTopologyInfo> topology;
-                HRESULT hr = filter_.As(&topology);
-                DWORD count = 0;
-                bool done = false;
-                if (SUCCEEDED(hr))
-                    topology->get_NumNodes(&count);
-                for (DWORD node = 0; node < count; ++node) {
-                    ComPtr<IVideoProcAmp> proc;
-                    if (FAILED(topology->CreateNodeInstance(node, __uuidof(IVideoProcAmp),
-                                                            (void **)proc.GetAddressOf())))
-                        continue;
-                    long lo = 0, hi = 0, step = 0, normal = 0, caps = 0;
-                    if (FAILED(proc->getRange_PowerlineFrequency(&lo, &hi, &step, &normal, &caps)))
-                        continue;
-                    hr = proc->put_PowerlineFrequency((long)v.value, 2);
-                    if (SUCCEEDED(hr)) {
-                        done = true;
-                        break;
-                    }
-                }
-                if (!done) {
-                    std::ostringstream error;
-                    error << "Camera rejected anti-flicker setting (0x" << std::hex
-                          << (unsigned long)hr << ")";
-                    throw std::runtime_error(error.str());
-                }
+                setAntiFlicker((long)v.value);
             } else {
                 std::vector<unsigned char> b(60);
                 b[0] = (unsigned char)d.property;

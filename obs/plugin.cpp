@@ -86,14 +86,14 @@ void obs_module_post_load(void) {
     try {
         if (!config) throw std::runtime_error("OBS did not provide a plugin configuration directory.");
         blog(LOG_DEBUG, "[tiny-ptz] Config: %s; bundled presets: %s", config, presets ? presets : "(none)");
-        dock = new tinyobs::Dock(ptz::wide(config), presets ? std::filesystem::path(ptz::wide(presets)) : std::filesystem::path(), host());
+        dock = new tinyobs::Dock(ptz::filePath(ptz::wide(config)), presets ? ptz::filePath(ptz::wide(presets)) : ptz::filePath(), host());
         if (!obs_frontend_add_dock_by_id(dockId, "Tiny PTZ", dock)) {
             delete dock.data(); dock = nullptr;
             throw std::runtime_error("Dock identifier is already registered.");
         }
         obs_frontend_add_event_callback(frontendEvent, nullptr);
         callbackInstalled = true;
-        blog(LOG_INFO, "[tiny-ptz] 0.4.4 dock loaded; camera controls use a dedicated COM thread.");
+        blog(LOG_INFO, "[tiny-ptz] 0.6.0 dock loaded; camera controls use a dedicated worker thread.");
     } catch (const std::exception &e) {
         blog(LOG_ERROR, "[tiny-ptz] %s", e.what());
     }

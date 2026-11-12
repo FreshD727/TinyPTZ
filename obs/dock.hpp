@@ -100,6 +100,7 @@ class Dock : public QWidget {
     void refreshPresets();
     void transferPresets(bool importing);
     void transferConfiguration(bool importing);
+    void assignPresetCamera();
     void capturePreset(bool replace);
     void recall(const ptz::Preset &preset, bool scene = false);
     void saveConfig();

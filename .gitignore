@@ -3,6 +3,8 @@ build/
 dist/
 *.user
 data/
+!obs/data/
+!obs/data/presets.ptz
 research/*raw*.json
 research/libdev-full-disassembly.txt
 research/rea-desktop.json

@@ -1,5 +1,9 @@
 # Tiny PTZ dock for OBS Studio — v0.4.4
 
+This guide describes the existing Windows release. The native Linux v0.6.0 port
+has a separate [Linux installation/build guide](OBS-LINUX.md); Windows DLLs are
+not used on Linux.
+
 Native Windows x64 OBS plugin for the OBSBOT Tiny SE. This package targets
 **OBS 31.x with Qt 6.6.3**, matching the local OBS 31.0.0-beta3 runtime used to
 build it. Other OBS/Qt versions require a matching rebuild; do not replace OBS's

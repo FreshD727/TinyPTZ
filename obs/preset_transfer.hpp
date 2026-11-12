@@ -1,13 +1,30 @@
 #pragma once
 #include "core.hpp"
+#include "scene_rules.hpp"
 #include <algorithm>
 namespace tinyobs {
+inline size_t rebindPresets(std::vector<ptz::Preset> &presets, SceneRules &rules,
+                            const std::wstring &source, const std::wstring &target) {
+    if (source.empty() || target.empty() || source == target) throw std::runtime_error("Choose two different camera identities.");
+    size_t count = 0;
+    for (auto &p : presets) if (p.device == source) {
+        PresetId before{p.device,p.name}; auto base=p.name;
+        auto exists = [&] { return std::any_of(presets.begin(),presets.end(),[&](const auto &other) { return &other != &p && other.device==target && other.name==p.name; }); };
+        for(size_t suffix=2;exists();++suffix) p.name=base+L" ("+std::to_wstring(suffix)+L")";
+        p.device=target; rules.rename(before,{p.device,p.name}); ++count;
+    }
+    return count;
+}
 inline bool samePresetFile(const std::filesystem::path &a, const std::filesystem::path &b) {
     std::error_code error;
     if (std::filesystem::equivalent(a, b, error)) return true;
-    auto first = std::filesystem::weakly_canonical(a).wstring();
-    auto second = std::filesystem::weakly_canonical(b).wstring();
+    auto first = ptz::pathText(std::filesystem::weakly_canonical(a));
+    auto second = ptz::pathText(std::filesystem::weakly_canonical(b));
+#ifdef _WIN32
     return CompareStringOrdinal(first.c_str(), -1, second.c_str(), -1, TRUE) == CSTR_EQUAL;
+#else
+    return first == second;
+#endif
 }
 // Read both files afresh; only publish the merged list after atomic save succeeds.
 inline size_t importPresetFile(ptz::PresetStore &active, const std::filesystem::path &path) {

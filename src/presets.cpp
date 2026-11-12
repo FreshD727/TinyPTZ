@@ -6,6 +6,11 @@
 #include <limits>
 #include <set>
 #include <sstream>
+#ifndef _WIN32
+#include <fcntl.h>
+#include <unistd.h>
+#include <cstdio>
+#endif
 namespace ptz {
 long quantize(long v, Range r) {
     if (!r.supported || r.step < 1 || r.min > r.max)
@@ -121,8 +126,19 @@ void PresetStore::save() const {
             std::filesystem::copy_file(path_, backup, std::filesystem::copy_options::skip_existing);
         }
     }
+#ifdef _WIN32
     if (!MoveFileExW(temp.c_str(), path_.c_str(),
                      MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
         throw std::runtime_error("Could not replace preset file; original file preserved");
+#else
+    int file = ::open(temp.c_str(), O_RDONLY | O_CLOEXEC);
+    if (file < 0) throw std::runtime_error("Cannot synchronize preset file; original preserved");
+    int synced = ::fsync(file); ::close(file);
+    if (synced != 0 || ::rename(temp.c_str(), path_.c_str()) != 0)
+        throw std::runtime_error("Could not replace preset file; original file preserved");
+    auto parent = path_.parent_path().empty() ? std::filesystem::path(".") : path_.parent_path();
+    int directory = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (directory >= 0) { ::fsync(directory); ::close(directory); }
+#endif
 }
 } // namespace ptz

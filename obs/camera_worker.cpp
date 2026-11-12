@@ -5,14 +5,20 @@
 namespace tinyobs {
 CameraWorker::CameraWorker(Error error) {
     thread_ = std::thread([this, error = std::move(error)] {
+#ifdef _WIN32
         HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+#endif
         {
             ptz::Camera camera;
             for (;;) {
                 Job job;
                 {
                     std::unique_lock<std::mutex> lock(mutex_);
+#ifdef _WIN32
                     condition_.wait_for(lock, std::chrono::milliseconds(15), [this] { return stopping_ || !jobs_.empty(); });
+#else
+                    condition_.wait(lock, [this] { return stopping_ || !jobs_.empty(); });
+#endif
                     if (stopping_) break;
                     if (!jobs_.empty()) {
                         job = std::move(jobs_.front());
@@ -20,21 +26,27 @@ CameraWorker::CameraWorker(Error error) {
                     }
                 }
                 try {
-                    if (FAILED(hr)) throw std::runtime_error("Cannot initialize camera COM worker.");
+#ifdef _WIN32
+                    if (job.work && FAILED(hr)) throw std::runtime_error("Cannot initialize camera COM worker.");
+#endif
                     if (job.work) job.work(camera);
                 } catch (const std::exception &e) {
                     error(e.what());
                 } catch (...) {
                     error("Unexpected camera error.");
                 }
+#ifdef _WIN32
                 MSG message;
                 while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
                     TranslateMessage(&message);
                     DispatchMessageW(&message);
                 }
+#endif
             }
         } // Release camera interfaces before uninitializing COM.
+#ifdef _WIN32
         if (SUCCEEDED(hr)) CoUninitialize();
+#endif
         finished_.store(true);
     });
 }
@@ -66,6 +78,7 @@ void CameraWorker::stop() {
     if (thread_.joinable()) {
         // Video renderer teardown may send window messages to the UI owner.
         // Keep its native message queue responsive until COM teardown finishes.
+#ifdef _WIN32
         while (!finished_.load()) {
             MsgWaitForMultipleObjectsEx(0, nullptr, 15, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
             MSG message;
@@ -74,6 +87,7 @@ void CameraWorker::stop() {
                 TranslateMessage(&message); DispatchMessageW(&message);
             }
         }
+#endif
         thread_.join();
     }
 }

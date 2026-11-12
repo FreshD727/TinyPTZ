@@ -8,7 +8,8 @@
 #include <atomic>
 
 namespace tinyobs {
-// All DirectShow/KS interfaces are created, used and destroyed in this STA.
+// Camera resources are created, used and destroyed on this worker.
+// Windows uses a COM STA; Linux owns the V4L2/UVC file descriptor here.
 // Named jobs replace older pending jobs, keeping slider/scene bursts bounded.
 class CameraWorker {
   public:

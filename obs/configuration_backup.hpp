@@ -17,7 +17,7 @@ struct ConfigurationBackup {
     bool saveCameraSettings = true;
 };
 inline QString backupPath(const std::filesystem::path &path) {
-    return QString::fromStdWString(path.wstring());
+    return QString::fromStdWString(ptz::pathText(path));
 }
 inline QJsonObject dockConfiguration(const std::filesystem::path &presets,
                                      const SceneRules &rules, bool saveCameraSettings) {
@@ -58,7 +58,7 @@ inline void exportConfiguration(const ptz::PresetStore &active, const std::files
     ptz::PresetStore fresh(active.path()); fresh.load();
     QTemporaryDir temp;
     if (!temp.isValid()) throw std::runtime_error("Cannot create temporary backup folder.");
-    ptz::PresetStore normalized(std::filesystem::path(temp.path().toStdWString()) / L"presets.ptz");
+    ptz::PresetStore normalized(ptz::filePath(temp.path().toStdWString()) / L"presets.ptz");
     normalized.items = std::move(fresh.items); normalized.save();
     QFile presets(backupPath(normalized.path()));
     if (!presets.open(QIODevice::ReadOnly)) throw std::runtime_error("Cannot read presets for backup.");
@@ -116,7 +116,7 @@ inline ConfigurationBackup readConfigurationBackup(const std::filesystem::path &
     }
     QTemporaryDir temp;
     if (!temp.isValid()) throw std::runtime_error("Cannot create temporary restore folder.");
-    auto presetPath = std::filesystem::path(temp.path().toStdWString()) / L"presets.ptz";
+    auto presetPath = ptz::filePath(temp.path().toStdWString()) / L"presets.ptz";
     QFile presets(backupPath(presetPath)); auto content = root["presets"].toString().toUtf8();
     if (!presets.open(QIODevice::WriteOnly) || presets.write(content) != content.size())
         throw std::runtime_error("Cannot validate backup presets.");

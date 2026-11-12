@@ -58,10 +58,10 @@ int main() {
                 "ordinary PTZ checks should not resend power commands");
         require(needsPowerCommand(false, 4, false, false), "privacy is not confirmed sleep");
         auto path = std::filesystem::current_path() / L"build" /
-                    (L"tiny-ptz-test-" + std::to_wstring(GetCurrentProcessId()) + L".ptz");
+                    (L"tiny-ptz-test-" + std::to_wstring(ptz::processId()) + L".ptz");
         PresetStore s(path);
         for (int i = 0; i < 1000; ++i)
-            s.items.push_back({L"Scene \"" + std::to_wstring(i) + L"\" – Küche",
+            s.items.push_back({L"Scene \"" + std::to_wstring(i) + L"\" â€“ KÃ¼che",
                                L"camera-id",
                                {i % 100, -10, 3}});
         s.items[0].settings = {{"brightness", 42, false},
