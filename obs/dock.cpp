@@ -96,10 +96,10 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
                          [this, axis] { if (!updating_) { stageAxis(axis, true); flushLive(); } });
     }
     ptzLayout->addLayout(grid);
-    auto live = new QLabel("Live camera position", ptzPage);
-    live->setObjectName("livePositionLabel");
-    ptzLayout->addWidget(live);
     if (standalone_) {
+        auto live = new QLabel("Live camera position", ptzPage);
+        live->setObjectName("livePositionLabel");
+        ptzLayout->addWidget(live);
         search_ = new QLineEdit(ptzPage);
         search_->setObjectName("presetSearch");
         search_->setPlaceholderText("Search presets");
