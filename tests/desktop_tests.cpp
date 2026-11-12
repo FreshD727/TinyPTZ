@@ -20,40 +20,13 @@
 #include <QVideoSink>
 #include <QVideoFrame>
 #include <QVideoFrameFormat>
-#include <QCamera>
-#include "linux_camera_match.hpp"
+#include "linux_preview.hpp"
 #endif
 #include <algorithm>
 #include <iostream>
 #include <fstream>
 static void require(bool value, const char *message) { if (!value) throw std::runtime_error(message); }
 static void uiTests(QApplication &app) {
-#ifndef _WIN32
-    {
-        QTemporaryDir temp;
-        auto selected = ptz::filePath(temp.path().toStdWString()) / "camera";
-        auto other = selected.parent_path() / "other";
-        auto link = selected.parent_path() / "by-id";
-        std::ofstream(selected).close(); std::ofstream(other).close();
-        std::filesystem::create_symlink(selected, link);
-        using tinyapp::matchPreviewDevice;
-        using tinyapp::PreviewDeviceIdentity;
-        std::vector<PreviewDeviceIdentity> ids{{"0", "Laptop camera"}, {"1", "OBSBOT Tiny SE"}};
-        require(matchPreviewDevice(link, "OBSBOT Tiny SE", ids).index == 1, "Qt 6.4 opaque camera IDs match by unique name");
-        std::reverse(ids.begin(), ids.end());
-        require(matchPreviewDevice(link, "OBSBOT Tiny SE", ids).index == 0, "opaque camera matching does not depend on enumeration order");
-        ids = {{"0", "OBSBOT Tiny SE"}, {"1", "OBSBOT Tiny SE"}};
-        require(matchPreviewDevice(link, "OBSBOT Tiny SE", ids).index < 0, "duplicate camera names never silently select another device");
-        ids = {{QByteArray::fromStdString(other.u8string()), "OBSBOT Tiny SE"}};
-        require(matchPreviewDevice(link, "OBSBOT Tiny SE", ids).index < 0, "a known different device path cannot match by name");
-        ids.push_back({QByteArray::fromStdString(selected.u8string()), "OBSBOT Tiny SE"});
-        require(matchPreviewDevice(link, "OBSBOT Tiny SE", ids).index == 1, "canonical path match wins over duplicate names");
-        require(!matchPreviewDevice(link, "OBSBOT Tiny SE", {}).error.contains("permission", Qt::CaseInsensitive),
-                "a missing video-device match is not reported as a permissions failure");
-        QCamera startup;
-        require(!startup.isActive(), "camera backend constructs without starting a stream");
-    }
-#endif
     QDir().mkpath("build/desktop");
     QTemporaryDir temp; require(temp.isValid(), "temporary portable data directory");
     auto data = ptz::filePath(temp.path().toStdWString());
@@ -119,6 +92,36 @@ static void uiTests(QApplication &app) {
         const auto stopped = preview->videoOutput()->grab().toImage();
         require(stopped.pixelColor(stopped.width() / 2, stopped.height() / 2) != expected,
                 "stopped preview clears painted camera pixels");
+        tinyapp::LinuxPreviewCapture capture;
+        int frames = 0; QString captureError; QImage last;
+        capture.frame = [&](const QImage &image) { ++frames; last = image; preview->presentImage(image); preview->setPlaying(true); };
+        capture.failed = [&](const QString &message) { captureError = message; };
+        for (int attempt = 0; attempt < 2; ++attempt) {
+            frames = 0;
+            auto error = capture.startTestPattern();
+            require(error.isEmpty(), qPrintable("MJPEG pipeline startup: " + error));
+            QElapsedTimer timer; timer.start();
+            while (frames < 3 && captureError.isEmpty() && timer.elapsed() < 5000) {
+                QApplication::processEvents(); QThread::msleep(5);
+            }
+            require(captureError.isEmpty() && frames >= 3, qPrintable("MJPEG capture frames: " + captureError));
+            require(last.size() == QSize(320, 180), "native video pipeline decodes MJPEG frames");
+            const auto picture = preview->videoOutput()->grab().toImage();
+            const auto color = picture.pixelColor(picture.width() / 2, picture.height() / 2);
+            const auto original = last.pixelColor(last.width() / 2, last.height() / 2);
+            require(std::abs(color.green() - original.green()) < 10 && std::abs(color.red() - original.red()) < 10,
+                    "decoded stream frames reach the software preview surface");
+            preview->videoOutput()->grab().save("build/desktop/linux-mjpeg-preview.png");
+            capture.stop(); capture.stop();
+            require(!capture.running(), "native capture stops and releases its pipeline");
+        }
+        require(capture.startTestPattern().isEmpty(), "finite video test stream starts");
+        QElapsedTimer endTimer; endTimer.start();
+        while (captureError.isEmpty() && endTimer.elapsed() < 5000) { QApplication::processEvents(); QThread::msleep(5); }
+        require(captureError.contains("ended") && !capture.running(), "actual stream end is reported and releases capture");
+        require(!capture.startDevice("/dev/tinyptz-no-such-device").isEmpty() && !capture.running(),
+                "missing selected video node is reported directly without camera-name matching");
+        preview->setPlaying(false);
 #endif
         theme->setCurrentIndex(theme->findData("light"));
         QApplication::processEvents();

@@ -14,14 +14,10 @@
 #ifdef _WIN32
 #include <dwmapi.h>
 #else
-#include <QCamera>
-#include <QCameraDevice>
-#include <QMediaCaptureSession>
-#include <QMediaDevices>
 #include <QVideoSink>
 #include <QVideoFrame>
 #include <QDebug>
-#include "linux_camera_match.hpp"
+#include "linux_preview.hpp"
 #endif
 #include <algorithm>
 namespace tinyapp {
@@ -44,6 +40,10 @@ class SoftwareVideoSurface : public QWidget {
         });
     }
     QVideoSink *sink() { return &sink_; }
+    void presentImage(const QImage &image) {
+        image_ = image; update();
+        if (!image.isNull() && ready) ready();
+    }
     std::function<void()> ready;
     std::function<void(const QString &)> failed;
   protected:
@@ -163,10 +163,11 @@ HWND PreviewCanvas::owner() const {
 QSize PreviewCanvas::videoSize() const { return surface_->size(); }
 #ifndef _WIN32
 QVideoSink *PreviewCanvas::videoSink() const { return static_cast<SoftwareVideoSurface *>(surface_)->sink(); }
+void PreviewCanvas::presentImage(const QImage &image) { static_cast<SoftwareVideoSurface *>(surface_)->presentImage(image); }
 #endif
 void PreviewCanvas::setPlaying(bool playing, const QString &message) {
 #ifndef _WIN32
-    if (!playing) videoSink()->setVideoFrame({});
+    if (!playing) { videoSink()->setVideoFrame({}); presentImage({}); }
 #endif
     placeholder_->setVisible(!playing);
     placeholder_->setText(message.isEmpty() ? "Preview is off\n\nConnect your camera, then start the preview." : message);
@@ -204,8 +205,7 @@ Window::Window(std::filesystem::path data, bool discover) {
     previewHeader->addWidget(previewButton_); previewLayout->addLayout(previewHeader);
     preview_ = new PreviewCanvas(previewCard); previewLayout->addWidget(preview_, 1);
 #ifndef _WIN32
-    capture_ = new QMediaCaptureSession(this);
-    capture_->setVideoSink(preview_->videoSink());
+    capture_ = new LinuxPreviewCapture(this);
     previewWatchdog_.setSingleShot(true); previewWatchdog_.setInterval(7000);
     QObject::connect(&previewWatchdog_, &QTimer::timeout, this, [this] {
         stopLinuxPreview(playing_ ? "Preview stopped receiving frames. Close other camera apps and try again."
@@ -224,19 +224,19 @@ Window::Window(std::filesystem::path data, bool discover) {
     theme_->setCurrentIndex(std::max(0, theme_->findData(controls_->themePreference())));
 #ifndef _WIN32
     preview_->frameReady = [this] {
-        if (!previewRequested_ || !camera_) return;
+        if (!previewRequested_ || !capture_->running()) return;
         previewWatchdog_.start();
         if (playing_) return;
         playing_ = true; preview_->setPlaying(true);
         previewButton_->setText("Stop preview"); previewButton_->setEnabled(true);
         controls_->setPreviewStatus("Preview is live.");
-        const auto frame = preview_->videoSink()->videoFrame();
-        qInfo() << "TinyPTZ preview: first decoded frame" << frame.size() << "format" << frame.pixelFormat();
+        qInfo() << "TinyPTZ preview: first decoded camera frame displayed";
     };
     preview_->frameError = [this](const QString &message) {
-        auto failed = camera_;
-        QTimer::singleShot(0, this, [this, failed, message] { if (failed && camera_ == failed) stopLinuxPreview(message); });
+        if (previewRequested_) stopLinuxPreview(message);
     };
+    capture_->frame = [this](const QImage &image) { preview_->presentImage(image); };
+    capture_->failed = [this](const QString &message) { stopLinuxPreview("Preview failed: " + message); };
 #endif
     controls_->connectionChanged = [this](bool connected, const QString &text) {
         connection_->setText(connected ? "Connected" : "Not connected"); connection_->setToolTip(text);
@@ -282,11 +282,7 @@ void Window::updateTheme() {
 #ifndef _WIN32
 void Window::stopLinuxPreview(const QString &message) {
     previewWatchdog_.stop(); previewRequested_ = false;
-    if (camera_) {
-        auto old = camera_; camera_ = nullptr;
-        QObject::disconnect(old, nullptr, this, nullptr);
-        old->stop(); capture_->setCamera(nullptr); old->deleteLater();
-    }
+    capture_->stop();
     playing_ = false; preview_->setPlaying(false, message);
     previewButton_->setText("Start preview");
     previewButton_->setEnabled(!closing_ && connection_->text() == "Connected");
@@ -295,36 +291,13 @@ void Window::stopLinuxPreview(const QString &message) {
 }
 void Window::startLinuxPreview() {
     stopLinuxPreview();
-    const auto selected = ptz::filePath(controls_->selectedDevice());
-    const auto devices = QMediaDevices::videoInputs();
-    std::vector<PreviewDeviceIdentity> identities;
-    qInfo() << "TinyPTZ preview: selected" << QString::fromStdWString(controls_->selectedDevice()) << controls_->selectedDeviceName();
-    for (const auto &candidate : devices) {
-        identities.push_back({candidate.id(), candidate.description()});
-        qInfo() << "TinyPTZ preview: video device" << candidate.id() << candidate.description();
-    }
-    const auto resolved = matchPreviewDevice(selected, controls_->selectedDeviceName(), identities);
-    if (resolved.index < 0) {
-        stopLinuxPreview(resolved.error);
-        return;
-    }
-    const auto match = devices[resolved.index];
-    camera_ = new QCamera(match, this);
-    capture_->setCamera(camera_);
-    QObject::connect(camera_, &QCamera::activeChanged, this, [this](bool active) {
-        // Camera activation alone does not mean it is delivering video.
-        if (!active && playing_) stopLinuxPreview("The camera stopped its video stream.");
-    });
-    QObject::connect(camera_, &QCamera::errorOccurred, this, [this](QCamera::Error error, const QString &message) {
-        if (error != QCamera::NoError) stopLinuxPreview("Preview failed: " + message);
-    });
     previewRequested_ = true;
     preview_->setPlaying(false, "Starting preview… Waiting for the first video frame.");
     previewButton_->setText("Stop preview"); previewButton_->setEnabled(true);
     controls_->setPreviewStatus("Starting preview… Waiting for video frames.");
-    qInfo() << "TinyPTZ preview: starting" << match.id() << "backend" << qgetenv("QT_MEDIA_BACKEND");
     previewWatchdog_.start();
-    camera_->start();
+    auto error = capture_->startDevice(QString::fromStdWString(controls_->selectedDevice()));
+    if (!error.isEmpty()) stopLinuxPreview("Preview failed: " + error);
 }
 #endif
 Window::~Window() {

@@ -1,4 +1,4 @@
-# Linux standalone v0.7.2 validation
+# Linux standalone v0.7.3 validation
 
 Built in Ubuntu 24.04 WSL, GCC 13, glibc 2.39 and Qt 6.4.2.
 
@@ -61,3 +61,23 @@ test checks the startup path without activating a physical stream.
 Upstream reference: https://github.com/qt/qtmultimedia/tree/v6.4.2/src/plugins/multimedia/gstreamer
 Logs: build/linux-preview-v072-package.log and build/desktop/opaque-camera-regression.log.
 Fedora camera operation still needs verification on the user's laptop.
+
+## v0.7.3 exact-device capture (replaces camera-name matching)
+
+Preview now opens the canonical selected V4L2 node using GStreamer's v4l2src,
+memory-mapped buffers, decodebin, videoconvert and a one-frame bounded appsink.
+It does not enumerate Qt camera IDs or select a device by name. The opaque-ID
+matching helper is removed. Supported MJPEG 720p30 is preferred, with supported
+raw modes or native negotiation as fallbacks. Errors originate from the selected
+video node/pipeline instead of generic name/permission guesses.
+
+New tests stream a live generated pattern through actual JPEG encoding,
+automatic decoding, RGBA conversion, appsink delivery and QWidget painting.
+They check multiple frames, displayed pixels, two stream starts/stops and failure
+on an absent device node. The generated MJPEG preview screenshot was inspected.
+The AppDir tests run against bundled libraries. The final AppImage also runs
+--check-preview-runtime to decode/display generated MJPEG without camera hardware.
+
+Logs: build/linux-native-preview-tests.log, build/linux-preview-v073-package.log,
+build/desktop/native-preview-regression.log. Fedora physical-camera verification
+remains outstanding because that laptop/camera is outside this workspace.
