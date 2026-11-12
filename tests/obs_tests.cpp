@@ -121,6 +121,8 @@ static void configurationTests(const std::filesystem::path &directory) {
     tinyobs::SceneRules rules; rules.enabled = true;
     rules.collections["Main collection"]["scene-uuid"] = {L"camera-a", L"Küche"};
     rules.collections["Second collection"]["other-uuid"] = {L"camera-a", L"Küche"};
+    rules.sceneNames["Main collection"]["scene-uuid"] = "My scene";
+    rules.sceneNames["Second collection"]["other-uuid"] = "Second scene";
     auto config = directory / L"dock.json";
     tinyobs::writeConfigurationJson(config, tinyobs::dockConfiguration(original.path(), rules, false));
     auto read = [](const std::filesystem::path &path) {
@@ -137,6 +139,7 @@ static void configurationTests(const std::filesystem::path &directory) {
             loaded.rules.lookup("Main collection", "scene-uuid")->name == L"Küche" &&
             loaded.rules.lookup("Second collection", "other-uuid")->device == L"camera-a",
             "backup includes automation, preferences and assignments in every collection");
+    require(loaded.rules.sceneNames["Main collection"]["scene-uuid"] == "My scene", "backup retains scene names for another PC");
     // Remove the old absolute path from availability: the backup is self-contained.
     auto destinationConfig = directory / L"new-machine" / L"dock.json";
     auto movedOriginal = directory / L"external-original-kept.ptz";
@@ -176,6 +179,11 @@ static void configurationTests(const std::filesystem::path &directory) {
         reject([&] { tinyobs::readConfigurationBackup(invalid); });
     };
     auto bad = json; bad["version"] = 9; checkInvalid(bad);
+    bad = json; auto invalidConfig = bad["configuration"].toObject();
+    auto invalidAssignments = invalidConfig["assignments"].toArray();
+    auto invalidAssignment = invalidAssignments[0].toObject(); invalidAssignment["sceneName"] = 99;
+    invalidAssignments[0] = invalidAssignment; invalidConfig["assignments"] = invalidAssignments;
+    bad["configuration"] = invalidConfig; checkInvalid(bad);
     bad = json; bad["presets"] = "TINY_PTZ_PRESETS 2\ninvalid\n"; checkInvalid(bad);
     bad = json; auto cfg = bad["configuration"].toObject(); cfg["sceneAutomation"] = "true";
     bad["configuration"] = cfg; checkInvalid(bad);
@@ -192,6 +200,98 @@ static void configurationTests(const std::filesystem::path &directory) {
     require(count() == before, "failed restore removes staged library and preserves prior configuration");
     std::cout << "PASS: full backup/restore roundtrip, all collection assignments, automation/preferences, portable preset library, restart persistence, malformed/version/duplicate rejection and failed-commit cleanup\n";
 }
+static void sceneMatchingTests(const std::filesystem::path &directory) {
+    tinyobs::PresetId original{L"camera-a", L"Wide"}, other{L"camera-a", L"Close"};
+    tinyobs::SceneRules rules; rules.enabled = true;
+    rules.collections["Show"]["old-uuid"] = original;
+    rules.sceneNames["Show"]["old-uuid"] = "Küche";
+    tinyobs::SceneCatalog destination;
+    destination.complete = true;
+    destination.collections["Show"]["new-uuid"] = "Küche";
+    destination.collections["Other"]["unrelated-uuid"] = "Küche";
+    auto ordinary = rules;
+    auto unchanged = tinyobs::resolveSceneAssignments(ordinary, destination);
+    require(!unchanged.changed && !ordinary.lookup("Show", "new-uuid"), "ordinary new scenes do not inherit assignments outside restore");
+    auto report = tinyobs::resolveSceneAssignments(rules, destination, true);
+    require(report.name == 1 && !report.unresolved && rules.lookup("Show", "new-uuid") == original &&
+            !rules.lookup("Show", "old-uuid") && !rules.lookup("Other", "unrelated-uuid"),
+            "another PC: same-collection exact name maps a changed UUID without crossing collections");
+    destination.collections["Show"]["new-uuid"] = "Renamed scene";
+    destination.collections["Show"]["another-uuid"] = "Küche";
+    report = tinyobs::resolveSceneAssignments(rules, destination, true);
+    require(report.uuid == 1 && !report.name && rules.lookup("Show", "new-uuid") == original,
+            "UUID wins over stale names when a scene was renamed");
+    require(rules.sceneNames["Show"]["new-uuid"] == "Renamed scene", "scene name refreshed after UUID match");
+    auto renamedCollection = rules;
+    tinyobs::SceneCatalog renamed; renamed.complete = true;
+    renamed.collections["New collection"]["pc2-uuid"] = "Renamed scene";
+    report = tinyobs::resolveSceneAssignments(renamedCollection, renamed, true);
+    require(report.name == 1 && renamedCollection.lookup("New collection", "pc2-uuid") == original,
+            "unique name supports a renamed destination collection");
+    auto ambiguous = rules;
+    renamed.collections["Another collection"]["duplicate-name"] = "Renamed scene";
+    report = tinyobs::resolveSceneAssignments(ambiguous, renamed, true);
+    require(report.unresolved == 1 && !report.name && !ambiguous.lookup("Show", "new-uuid"),
+            "ambiguous names stay pending and cannot trigger a camera");
+    auto incomplete = rules; renamed.complete = false;
+    report = tinyobs::resolveSceneAssignments(incomplete, renamed, true);
+    require(report.unresolved == 1, "incomplete catalog cannot establish a global unique match");
+    auto pending = rules;
+    tinyobs::SceneCatalog empty; empty.collections["Show"] = {};
+    report = tinyobs::resolveSceneAssignments(pending, empty, true);
+    require(report.unresolved == 1 && pending.restorePending.size() == 1, "missing scene retained for later");
+    tinyobs::SceneCatalog later; later.collections["Show"]["later-uuid"] = "Renamed scene";
+    report = tinyobs::resolveSceneAssignments(pending, later);
+    require(report.name == 1 && pending.lookup("Show", "later-uuid") == original && pending.restorePending.empty(),
+            "pending assignment resolves when its collection or scene becomes available");
+    auto manuallyAssigned = ambiguous;
+    manuallyAssigned.collections["Show"]["later-uuid"] = other;
+    report = tinyobs::resolveSceneAssignments(manuallyAssigned, later);
+    require(report.unresolved == 1 && manuallyAssigned.lookup("Show", "later-uuid") == other,
+            "a manually assigned destination takes priority over pending restoration");
+    auto conflicting = rules;
+    conflicting.collections["Show"]["second-old"] = other;
+    conflicting.sceneNames["Show"]["second-old"] = "Renamed scene";
+    report = tinyobs::resolveSceneAssignments(conflicting, later, true);
+    require(report.unresolved == 2 && !report.name, "two source assignments never silently overwrite one target");
+    auto exactPriority = rules;
+    exactPriority.collections["Show"]["later-uuid"] = other;
+    exactPriority.sceneNames["Show"]["later-uuid"] = "Renamed scene";
+    report = tinyobs::resolveSceneAssignments(exactPriority, later, true);
+    require(report.uuid == 1 && report.unresolved == 1 && exactPriority.lookup("Show", "later-uuid") == other,
+            "an exact UUID assignment wins a competing name match");
+    tinyobs::SceneRules legacy; legacy.enabled = true;
+    legacy.collections["Show"]["new-uuid"] = original;
+    report = tinyobs::resolveSceneAssignments(legacy, destination, true);
+    require(report.uuid == 1, "older nameless backups still restore by UUID");
+    legacy.sceneNames.clear();
+    report = tinyobs::resolveSceneAssignments(legacy, later, true);
+    require(report.unresolved == 1 && !report.details.empty(), "unmatched legacy backups report what needs re-exporting");
+    std::filesystem::create_directories(directory);
+    tinyobs::writeConfigurationJson(directory / L"show.json", QJsonObject{{"name", "Show"}, {"sources", QJsonArray{
+        QJsonObject{{"id", "scene"}, {"uuid", "disk-uuid"}, {"name", "Saved scene"}},
+        QJsonObject{{"id", "camera"}, {"uuid", "camera-id"}, {"name", "Not a scene"}}}}});
+    auto diskCatalog = tinyobs::readSceneCatalog(directory);
+    require(diskCatalog.complete && diskCatalog.collections["Show"].size() == 1 &&
+            diskCatalog.collections["Show"]["disk-uuid"] == "Saved scene", "inactive OBS collection names read without loading sources");
+    tinyobs::SceneRules remembered;
+    remembered.collections["Show"]["disk-uuid"] = original;
+    require(tinyobs::rememberSceneNames(remembered, diskCatalog) &&
+            remembered.sceneNames["Show"]["disk-uuid"] == "Saved scene", "existing assignments gain names before export");
+    std::ofstream(directory / L"broken.json") << "invalid";
+    require(!tinyobs::readSceneCatalog(directory).complete, "unreadable/invalid collection prevents unsafe global matching");
+    // Verify mapped UUIDs/names and pending flags survive a real config restart.
+    auto config = directory / L"plugin" / L"dock.json";
+    tinyobs::ConfigurationBackup snapshot;
+    snapshot.presets = {{original.name, original.device, {0, 0, 0}, {}}};
+    snapshot.rules = ambiguous;
+    auto store = tinyobs::restoreConfiguration(config, snapshot);
+    tinyobs::Host host{[] { return std::vector<tinyobs::Scene>{{"later-uuid", "Renamed scene"}}; },
+                      [] { return tinyobs::Scene{"later-uuid", "Renamed scene"}; }, [] { return std::string("Show"); }};
+    tinyobs::Dock dock(config, {}, host, false);
+    require(dock.findChild<QComboBox *>("scenePreset")->currentIndex() == 1, "name-remapped assignment survives dock recreation");
+    std::cout << "PASS: cross-PC scene-name matching, UUID priority, collection isolation/rename, Unicode, inactive catalogs, deferred matches, collision protection, legacy backups and restart persistence\n";
+}
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setStyle("Fusion");
@@ -201,6 +301,7 @@ int main(int argc, char **argv) {
         require(temp.isValid(), "temporary config directory");
         transferTests(std::filesystem::path(temp.path().toStdWString()) / L"transfer");
         configurationTests(std::filesystem::path(temp.path().toStdWString()) / L"configuration");
+        sceneMatchingTests(std::filesystem::path(temp.path().toStdWString()) / L"scene-matching");
         auto config = std::filesystem::path(temp.path().toStdWString()) / L"dock.json";
         auto library = config.parent_path() / L"saved.ptz";
         ptz::PresetStore presets(library);

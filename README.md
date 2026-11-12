@@ -7,7 +7,7 @@ This independent app uses Windows camera interfaces directly; see the
 [settings coverage](docs/SETTINGS.md) for capabilities and remaining gaps.
 
 The [OBS Studio dock plugin](docs/OBS-PLUGIN.md) is available separately as
-`dist/TinyPTZ-OBS-v0.4.2-Windows-x64.zip` for OBS 31.x / Qt 6.6.3 on Windows x64.
+`dist/TinyPTZ-OBS-v0.4.3-Windows-x64.zip` for OBS 31.x / Qt 6.6.3 on Windows x64.
 It provides live PTZ/settings controls, the same saved presets, and automatic
 preset recall when the active Program scene changes. Build it with
 `./build-obs.ps1 -Setup -Package`; the standalone app does not require OBS.

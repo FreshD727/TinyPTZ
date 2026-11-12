@@ -1,3 +1,11 @@
+Tiny PTZ OBS plugin v0.4.3 scene-name restore validation — 2026-11-12
+PASS: changed destination UUIDs resolve by exact Unicode scene name within collection; exact UUID wins after rename.
+PASS: renamed collections resolve by globally unique UUID/name when a complete destination catalog is available.
+PASS: ambiguous names, competing assignments and incomplete catalogs stay inactive; manual assignments are protected.
+PASS: pending matches resolve after collection load and persist through dock recreation; inactive OBS collection metadata is read without switching scenes.
+PASS: current and legacy backup paths, preset/configuration roundtrips and actual libobs loader/lifecycle regressions.
+Camera/protocol code is unchanged; earlier hardware evidence below is from v0.4.0.
+
 Tiny PTZ OBS plugin v0.4.2 full-configuration backup validation — 2026-11-12
 PASS: self-contained preset/settings and scene-assignment roundtrip for all collections; automation and capture preferences preserved.
 PASS: restored configuration loads in a new dock; original external preset/config files preserved; restored library uses local paths.

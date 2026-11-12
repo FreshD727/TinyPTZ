@@ -1,6 +1,7 @@
 #pragma once
 #include "camera_worker.hpp"
 #include "scene_rules.hpp"
+#include "scene_matching.hpp"
 #include <QWidget>
 #include <QTimer>
 #include <QJsonObject>
@@ -89,5 +90,6 @@ class Dock : public QWidget {
     void loadConfig(const std::filesystem::path &bundledPresets);
     void selectScene();
     void assignScene();
+    SceneCatalog sceneCatalog() const;
 };
 } // namespace tinyobs

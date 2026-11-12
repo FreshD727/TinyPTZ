@@ -31,6 +31,12 @@ inline QJsonObject dockConfiguration(const std::filesystem::path &presets,
         QJsonObject o;
         o["collection"] = QString::fromUtf8(collection.first.c_str());
         o["scene"] = QString::fromUtf8(scene.first.c_str());
+        auto names = rules.sceneNames.find(collection.first);
+        if (names != rules.sceneNames.end()) {
+            auto name = names->second.find(scene.first);
+            if (name != names->second.end()) o["sceneName"] = QString::fromUtf8(name->second.c_str());
+        }
+        if (rules.restorePending.count({collection.first, scene.first})) o["matchByName"] = true;
         o["device"] = QString::fromStdWString(scene.second.device);
         o["preset"] = QString::fromStdWString(scene.second.name);
         assignments.append(o);
@@ -99,6 +105,14 @@ inline ConfigurationBackup readConfigurationBackup(const std::filesystem::path &
         auto &rules = result.rules.collections[collection];
         if (rules.count(scene)) throw std::runtime_error("Duplicate scene assignment in backup.");
         rules.emplace(scene, PresetId{o["device"].toString().toStdWString(), o["preset"].toString().toStdWString()});
+        if (o.contains("sceneName")) {
+            if (!o["sceneName"].isString()) throw std::runtime_error("Invalid scene name in backup.");
+            result.rules.sceneNames[collection][scene] = o["sceneName"].toString().toUtf8().toStdString();
+        }
+        if (o.contains("matchByName")) {
+            if (!o["matchByName"].isBool()) throw std::runtime_error("Invalid scene matching flag in backup.");
+            if (o["matchByName"].toBool()) result.rules.restorePending.insert({collection, scene});
+        }
     }
     QTemporaryDir temp;
     if (!temp.isValid()) throw std::runtime_error("Cannot create temporary restore folder.");

@@ -617,16 +617,26 @@ void Dock::transferConfiguration(bool importing) {
     try {
         auto path = std::filesystem::path(dialog.selectedFiles().first().toStdWString());
         if (!importing) {
+            rememberSceneNames(rules_, sceneCatalog());
             exportConfiguration(*store_, config_, rules_, includeSettings_->isChecked(), path);
             status("Plugin configuration and presets backed up to " + fileName(path));
             return;
         }
         auto restored = readConfigurationBackup(path);
+        auto matches = resolveSceneAssignments(restored.rules, sceneCatalog(), true);
         size_t assignments = 0;
         for (auto &collection : restored.rules.collections) assignments += collection.second.size();
         auto question = QString("Restore %1 presets and %2 scene assignments?\n\nThis replaces the plugin's active configuration and automation preference. The current preset file is kept unchanged. No camera movement is triggered by restoring.")
                             .arg(restored.presets.size()).arg(assignments);
-        if (QMessageBox::question(this, "Restore plugin configuration", question, QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes) return;
+        question += QString("\n\nScene matches: %1 by UUID, %2 by name, %3 pending review.")
+                        .arg(matches.uuid).arg(matches.name).arg(matches.unresolved);
+        QMessageBox confirmation(QMessageBox::Question, "Restore plugin configuration", question,
+                                 QMessageBox::Yes | QMessageBox::Cancel, this);
+        confirmation.setDefaultButton(QMessageBox::Cancel);
+        QStringList matchDetails;
+        for (auto &detail : matches.details) matchDetails.append(qs(detail));
+        confirmation.setDetailedText(matchDetails.join('\n'));
+        if (confirmation.exec() != QMessageBox::Yes) return;
         auto next = restoreConfiguration(config_, restored);
         ++*sceneGeneration_; ++deviceRevision_;
         edits_.clear(); liveTimer_.stop(); worker_->cancel("");
@@ -635,7 +645,8 @@ void Dock::transferConfiguration(bool importing) {
         sceneEnabled_->setChecked(rules_.enabled);
         includeSettings_->setChecked(restored.saveCameraSettings);
         refreshPresets(); refreshScenes();
-        status("Plugin configuration restored. Scene automation resumes on the next Program scene change.");
+        status(QString("Restored: %1 UUID matches, %2 name matches, %3 unresolved. Automation resumes on the next Program scene change.")
+                   .arg(matches.uuid).arg(matches.name).arg(matches.unresolved));
     } catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
 }
 void Dock::capturePreset(bool replace) {
@@ -712,6 +723,9 @@ void Dock::loadConfig(const std::filesystem::path &bundledPresets) {
                 if (o["scene"].toString().isEmpty() || o["preset"].toString().isEmpty()) continue;
                 rules_.collections[bytes(o["collection"].toString())][bytes(o["scene"].toString())] =
                     {o["device"].toString().toStdWString(), o["preset"].toString().toStdWString()};
+                auto collection = bytes(o["collection"].toString()), scene = bytes(o["scene"].toString());
+                if (o["sceneName"].isString()) rules_.sceneNames[collection][scene] = bytes(o["sceneName"].toString());
+                if (o["matchByName"].toBool()) rules_.restorePending.insert({collection, scene});
             }
         }
         if (!std::filesystem::exists(presetPath) && presetPath == config_.parent_path() / L"presets.ptz" && std::filesystem::exists(bundledPresets))
@@ -732,6 +746,10 @@ void Dock::saveConfig() {
 }
 void Dock::refreshScenes() {
     if (stopped_) return;
+    auto catalog = sceneCatalog();
+    auto matching = resolveSceneAssignments(rules_, catalog);
+    bool namesChanged = rememberSceneNames(rules_, catalog);
+    if (store_ && (matching.changed || namesChanged)) saveConfig();
     auto previous = scenes_->currentData().toString();
     QSignalBlocker block(scenes_); scenes_->clear();
     for (auto &scene : host_.scenes()) scenes_->addItem(scene.name, qs(scene.uuid));
@@ -747,24 +765,45 @@ void Dock::selectScene() {
     if (c != rules_.collections.end()) {
         auto s = c->second.find(scene);
         if (s != c->second.end()) {
+            if (rules_.restorePending.count({collection, scene})) {
+                sceneStatus_->setText("Restored assignment is unresolved. Choose a preset and save to assign this scene."); return;
+            }
             int index = -1;
             for (int i = 0; store_ && i < (int)store_->items.size(); ++i) if (id(store_->items[i]) == s->second) index = i;
             scenePresets_->setCurrentIndex(index >= 0 ? index + 1 : 0);
             if (index < 0) { sceneStatus_->setText("Assigned preset is missing: " + qs(s->second.name) + ". Choose a replacement or clear the assignment."); return; }
         }
     }
-    sceneStatus_->setText("Collection: " + qs(collection) + "\nActive Program scene: " + host_.currentScene().name);
+    auto text = "Collection: " + qs(collection) + "\nActive Program scene: " + host_.currentScene().name;
+    if (!rules_.restorePending.empty()) text += QString("\n%1 restored assignments remain unmatched and inactive.").arg(rules_.restorePending.size());
+    sceneStatus_->setText(text);
 }
 void Dock::assignScene() {
     auto collection = host_.collection(); auto scene = bytes(scenes_->currentData().toString());
     if (scene.empty()) return;
     int preset = scenePresets_->currentData().toInt();
-    if (preset < 0 || preset >= (int)store_->items.size()) rules_.collections[collection].erase(scene);
-    else rules_.collections[collection][scene] = id(store_->items[preset]);
+    rules_.restorePending.erase({collection, scene});
+    if (preset < 0 || preset >= (int)store_->items.size()) {
+        rules_.collections[collection].erase(scene); rules_.sceneNames[collection].erase(scene);
+    } else {
+        rules_.collections[collection][scene] = id(store_->items[preset]);
+        rules_.sceneNames[collection][scene] = bytes(scenes_->currentText());
+    }
     saveConfig(); selectScene();
     if (scene == host_.currentScene().uuid) sceneChanged();
 }
 void Dock::frontendReady() { if (!stopped_) { ready_ = true; refreshScenes(); sceneChanged(); } }
+SceneCatalog Dock::sceneCatalog() const {
+    // OBS module configs live in <OBS config>/plugin_config/tiny-ptz/dock.json.
+    auto root = config_.parent_path().parent_path().parent_path();
+    auto catalog = readSceneCatalog(root / L"basic" / L"scenes");
+    auto collection = host_.collection();
+    if (!collection.empty()) {
+        auto &current = catalog.collections[collection]; current.clear();
+        for (auto &scene : host_.scenes()) current[scene.uuid] = bytes(scene.name);
+    }
+    return catalog;
+}
 void Dock::collectionChanging() {
     ready_ = false; ++*sceneGeneration_; worker_->cancel("recall");
 }

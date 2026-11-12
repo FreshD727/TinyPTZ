@@ -93,7 +93,7 @@ void obs_module_post_load(void) {
         }
         obs_frontend_add_event_callback(frontendEvent, nullptr);
         callbackInstalled = true;
-        blog(LOG_INFO, "[tiny-ptz] 0.4.2 dock loaded; camera controls use a dedicated COM thread.");
+        blog(LOG_INFO, "[tiny-ptz] 0.4.3 dock loaded; camera controls use a dedicated COM thread.");
     } catch (const std::exception &e) {
         blog(LOG_ERROR, "[tiny-ptz] %s", e.what());
     }
