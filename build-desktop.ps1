@@ -29,7 +29,13 @@ $core = @('camera','presets','protocol','settings') | ForEach-Object { "$out\$_.
 $controls = @("$out\camera_worker.obj", "$out\dock.obj")
 $native = @('ole32.lib','oleaut32.lib','strmiids.lib','user32.lib')
 $qt = @('Qt6Core.lib','Qt6Gui.lib','Qt6Widgets.lib','dwmapi.lib')
-& $compiler @common src/qt_app.cpp "/Fo$out\qt_app.obj" "/Fe$out\TinyPTZ.exe" @core @controls "$out\qt_window.obj" @native @qt Qt6EntryPoint.lib shell32.lib /link /SUBSYSTEM:WINDOWS
+& "$QtRoot\bin\rcc.exe" --name app_icon --output "$out\qrc_app_icon.cpp" assets/app_icon.qrc
+if ($LASTEXITCODE -ne 0) { throw 'Qt icon resource generation failed.' }
+& $compiler @common /c "$out\qrc_app_icon.cpp" "/Fo$out\qrc_app_icon.obj"
+if ($LASTEXITCODE -ne 0) { throw 'Qt icon resource compilation failed.' }
+& "$kit\bin\$version\x64\rc.exe" /nologo /Iassets "/fo$out\app_icon.res" assets/windows.rc
+if ($LASTEXITCODE -ne 0) { throw 'Windows icon resource compilation failed.' }
+& $compiler @common src/qt_app.cpp "/Fo$out\qt_app.obj" "/Fe$out\TinyPTZ.exe" @core @controls "$out\qt_window.obj" "$out\qrc_app_icon.obj" "$out\app_icon.res" @native @qt Qt6EntryPoint.lib shell32.lib /link /SUBSYSTEM:WINDOWS
 if ($LASTEXITCODE -ne 0) { throw 'Qt desktop link failed.' }
 & $compiler @common src/cli.cpp "/Fo$out\cli.obj" "/Fe$out\ptzctl.exe" @core @native
 if ($LASTEXITCODE -ne 0) { throw 'CLI build failed.' }
@@ -53,7 +59,7 @@ try {
     }
 } finally { $env:PATH = $oldPath; $env:QT_QPA_PLATFORM = $oldPlatform; $env:QT_QPA_PLATFORM_PLUGIN_PATH = $oldPluginPath }
 if ($Package) {
-    $release = Join-Path $PSScriptRoot 'dist\TinyPTZ-v0.7.3'
+    $release = Join-Path $PSScriptRoot 'dist\TinyPTZ-v0.7.4'
     New-Item -ItemType Directory -Force $release,"$release\platforms","$release\sources","$release\licenses\Qt","$release\data" | Out-Null
     Copy-Item -LiteralPath "$out\TinyPTZ.exe","$out\ptzctl.exe",README.md,THIRD-PARTY-NOTICES.md -Destination $release -Force
     Copy-Item -LiteralPath "$QtRoot\bin\Qt6Core.dll","$QtRoot\bin\Qt6Gui.dll","$QtRoot\bin\Qt6Widgets.dll" -Destination $release -Force
@@ -79,8 +85,8 @@ if ($Package) {
     if ($LASTEXITCODE -ne 0) { throw 'Qt license extraction failed.' }
     Copy-Item -Path "$licenseTemp\qtbase-everywhere-src-6.6.3\LICENSES\*" -Destination "$release\licenses\Qt" -Force
     Copy-Item -LiteralPath "$licenseTemp\qtbase-everywhere-src-6.6.3\LICENSES\GPL-2.0-only.txt" -Destination "$release\LICENSE.txt" -Force
-    Compress-Archive -LiteralPath src,obs,tests,CMakeLists.txt,build.ps1,build-desktop.ps1,README.md,THIRD-PARTY-NOTICES.md,docs -DestinationPath "$release\sources\TinyPTZ-source.zip" -Force
+    Compress-Archive -LiteralPath src,obs,tests,assets,packaging,CMakeLists.txt,build.ps1,build-desktop.ps1,build-linux.sh,build-linux-desktop.sh,README.md,LICENSE.txt,THIRD-PARTY-NOTICES.md,docs -DestinationPath "$release\sources\TinyPTZ-source.zip" -Force
     if (Test-Path -LiteralPath research/desktop-qt-validation.txt) { Copy-Item -LiteralPath research/desktop-qt-validation.txt -Destination "$release\VALIDATION.txt" -Force }
-    Compress-Archive -LiteralPath $release -DestinationPath dist/TinyPTZ-v0.7.3-Windows-x64.zip -Force
+    Compress-Archive -LiteralPath $release -DestinationPath dist/TinyPTZ-v0.7.4-Windows-x64.zip -Force
     Write-Host "Portable Qt app: $release\TinyPTZ.exe"
 }

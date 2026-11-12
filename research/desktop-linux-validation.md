@@ -1,4 +1,4 @@
-# Linux standalone v0.7.3 validation
+# Linux standalone v0.7.4 validation
 
 Built in Ubuntu 24.04 WSL, GCC 13, glibc 2.39 and Qt 6.4.2.
 
@@ -81,3 +81,19 @@ The AppDir tests run against bundled libraries. The final AppImage also runs
 Logs: build/linux-native-preview-tests.log, build/linux-preview-v073-package.log,
 build/desktop/native-preview-regression.log. Fedora physical-camera verification
 remains outstanding because that laptop/camera is outside this workspace.
+
+## v0.7.4 application icons
+
+The same PTZ camera artwork is embedded as a Qt resource on both platforms.
+Windows also embeds a multi-resolution ICO as a native executable resource.
+The Windows shell icon was extracted and visually inspected; the minimal
+Windows runtime --check-runtime passed with only its bundled runtime files.
+Linux uses desktop ID tinyptz and supports --install-desktop-entry to install
+its launcher and PNG icon in the user's XDG data directory for Wayland menus
+and docks. Registration was checked in an isolated XDG_DATA_HOME using desktop-
+file-validate, GIO metadata, GLib argument parsing (including a path with spaces)
+and the installed PNG signature. Linux AppImage UI/preview runtime checks and
+both platform regression suites passed. The user reported v0.7.3 camera control
+and preview working on Fedora; icon changes do not alter the capture backend.
+Logs: build/linux-icon-package.log, build/linux-icon-launcher-check.log,
+build/desktop/icon-build.log.

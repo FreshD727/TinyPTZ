@@ -1,0 +1,5 @@
+<RCC>
+ <qresource prefix="/tinyptz">
+  <file alias="icon.png">tinyptz.png</file>
+ </qresource>
+</RCC>

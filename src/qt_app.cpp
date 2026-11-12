@@ -3,15 +3,19 @@
 #include <QMessageBox>
 #include <QCommandLineParser>
 #include <QStandardPaths>
+#include <QIcon>
 #ifndef _WIN32
 #include "linux_preview.hpp"
+#include "desktop_entry.hpp"
 #include <QElapsedTimer>
 #include <QThread>
 #include <QDebug>
 #endif
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
-    app.setApplicationName("TinyPTZ"); app.setApplicationDisplayName("Tiny PTZ"); app.setApplicationVersion("0.7.3");
+    app.setApplicationName("TinyPTZ"); app.setApplicationDisplayName("Tiny PTZ"); app.setApplicationVersion("0.7.4");
+    app.setWindowIcon(QIcon(":/tinyptz/icon.png"));
+    app.setDesktopFileName("tinyptz");
     app.setStyle("Fusion");
 #ifdef _WIN32
     app.setFont(QFont("Segoe UI", 10));
@@ -22,10 +26,18 @@ int main(int argc, char **argv) {
     parser.addOption({"check-runtime", "Check the UI/runtime without connecting to a camera."});
 #ifndef _WIN32
     parser.addOption({"check-preview-runtime", "Decode and display a test video without opening a camera."});
+    parser.addOption({"install-desktop-entry", "Add Tiny PTZ and its icon to your applications menu."});
 #endif
     parser.addOption({"data-dir", "Store presets and preferences in this directory.", "directory"});
     parser.process(app);
     try {
+#ifndef _WIN32
+        if (parser.isSet("install-desktop-entry")) {
+            auto error = tinyapp::installDesktopEntry();
+            if (!error.isEmpty()) { qCritical().noquote() << error; return 1; }
+            qInfo() << "Tiny PTZ launcher and icon installed for the current user."; return 0;
+        }
+#endif
         bool runtimeCheck = parser.isSet("check-runtime");
 #ifndef _WIN32
         const bool previewCheck = parser.isSet("check-preview-runtime");
@@ -57,7 +69,7 @@ int main(int argc, char **argv) {
             qInfo() << "PASS: MJPEG camera-preview decode and display path"; return 0;
         }
 #endif
-        if (runtimeCheck) return 0;
+        if (runtimeCheck) return app.windowIcon().isNull() ? 1 : 0;
         window.show();
         return app.exec();
     } catch (const std::exception &e) {

@@ -4,7 +4,7 @@ A native Qt camera controller for the OBSBOT Tiny SE, with a resizable preview,
 dark/light/system themes, live PTZ controls, tracking/image/device settings and
 unlimited presets. The standalone app and OBS plugin share the same camera core.
 
-The standalone application also runs on Linux. The **v0.7.3 x86_64 AppImage**
+The standalone application also runs on Linux. The **v0.7.4 x86_64 AppImage**
 includes Qt and video-preview dependencies and targets Ubuntu 24.04 or compatible
 newer systems. See [Linux standalone instructions](docs/DESKTOP-LINUX.md) for
 launching, portable data storage and building it yourself. The Windows release
@@ -12,7 +12,7 @@ below remains available separately.
 
 ## Run the Windows release
 
-Extract the whole `TinyPTZ-v0.5.0` folder and open **TinyPTZ.exe**. Keep the Qt
+Extract the whole `TinyPTZ-v0.7.4` folder and open **TinyPTZ.exe**. Keep the Qt
 DLLs and `platforms` folder beside it. The package includes the Qt and Visual C++
 runtimes: OBS Studio, OBSBOT Center, Python, Node and an installer are not required.
 Use a writable folder; portable data stays in `data` beside the executable.

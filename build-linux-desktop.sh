@@ -35,18 +35,18 @@ export EXTRA_PLATFORM_PLUGINS='libqwayland-egl.so;libqwayland-generic.so;libqoff
 export EXTRA_QT_MODULES='waylandclient'
 "$tools/linuxdeploy-x86_64.AppImage" --appdir "$appdir" \
     --executable "$build/TinyPTZ" --desktop-file "$root/packaging/linux/tinyptz.desktop" \
-    --icon-file "$root/packaging/linux/tinyptz.png" --plugin qt \
+    --icon-file "$root/assets/tinyptz.png" --plugin qt \
     --deploy-deps-only "$appdir/usr/lib/gstreamer-1.0" \
     --deploy-deps-only "$appdir/usr/libexec/gst-plugin-scanner" \
     --custom-apprun "$root/packaging/linux/AppRun"
 python3 "$root/packaging/linux/collect-notices.py" "$appdir"
 bash "$root/packaging/linux/verify-appdir.sh" "$appdir"
 mkdir -p "$root/dist"
-export OUTPUT="$root/dist/TinyPTZ-v0.7.3-Linux-x86_64.AppImage" VERSION=0.7.3 ARCH=x86_64
+export OUTPUT="$root/dist/TinyPTZ-v0.7.4-Linux-x86_64.AppImage" VERSION=0.7.4 ARCH=x86_64
 "$tools/linuxdeploy-x86_64.AppImage" --appdir "$appdir" \
     --custom-apprun "$root/packaging/linux/AppRun" --output appimage
 chmod +x "$OUTPUT"
 QT_QPA_PLATFORM=offscreen "$OUTPUT" --appimage-extract-and-run --check-runtime --data-dir "$build/runtime-check-data"
 QT_QPA_PLATFORM=offscreen "$OUTPUT" --appimage-extract-and-run --check-preview-runtime --data-dir "$build/runtime-check-data"
-cp "$root/docs/DESKTOP-LINUX.md" "$root/dist/TinyPTZ-v0.7.3-Linux-README.md"
+cp "$root/docs/DESKTOP-LINUX.md" "$root/dist/TinyPTZ-v0.7.4-Linux-README.md"
 sha256sum "$OUTPUT"
