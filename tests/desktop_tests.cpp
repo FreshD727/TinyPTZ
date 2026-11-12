@@ -15,12 +15,20 @@
 #include <QDoubleSpinBox>
 #include <QSlider>
 #include <QSignalBlocker>
+#include <QDir>
+#ifndef _WIN32
+#include <QVideoWidget>
+#include <QVideoSink>
+#include <QVideoFrame>
+#include <QVideoFrameFormat>
+#endif
 #include <algorithm>
 #include <iostream>
 static void require(bool value, const char *message) { if (!value) throw std::runtime_error(message); }
 static void uiTests(QApplication &app) {
+    QDir().mkpath("build/desktop");
     QTemporaryDir temp; require(temp.isValid(), "temporary portable data directory");
-    auto data = std::filesystem::path(temp.path().toStdWString());
+    auto data = ptz::filePath(temp.path().toStdWString());
     ptz::PresetStore presets(data / L"presets.ptz");
     presets.items = {{L"Wide view", L"camera-a", {17, -4, 0}, {}}, {L"Desk", L"camera-a", {-15, 8, 2}, {}}}; presets.save();
     tinyobs::SceneRules rules;
@@ -43,12 +51,28 @@ static void uiTests(QApplication &app) {
         // PreviewCanvas has no custom Qt metaobject; obtain through its QWidget name.
         auto canvasWidget = window.findChild<QWidget *>("previewCanvas");
         auto preview = static_cast<tinyapp::PreviewCanvas *>(canvasWidget);
-        require(preview && preview->owner() && (app.platformName() != "windows" || IsWindow(preview->owner())), "native preview owner retained");
+        require(preview && preview->videoOutput(), "preview surface retained");
+#ifdef _WIN32
+        require(preview->owner() && (app.platformName() != "windows" || IsWindow(preview->owner())), "native preview owner retained");
+#endif
         window.resize(1180, 790);
         QApplication::processEvents();
         window.grab().save("build/desktop/dark-preview.png");
         auto size = preview->videoSize();
         require(std::abs(size.width() * 9 - size.height() * 16) <= 16, "preview retains 16:9 aspect ratio");
+#ifndef _WIN32
+        auto video = qobject_cast<QVideoWidget *>(preview->videoOutput());
+        require(video && video->videoSink(), "Linux preview has a Qt video sink");
+        QVideoFrame frame(QVideoFrameFormat(QSize(320, 180), QVideoFrameFormat::Format_BGRA8888));
+        require(frame.map(QVideoFrame::WriteOnly), "synthetic preview frame maps");
+        std::fill(frame.bits(0), frame.bits(0) + frame.mappedBytes(0), 128);
+        frame.unmap(); video->videoSink()->setVideoFrame(frame);
+        preview->setPlaying(true); QApplication::processEvents();
+        require(video->videoSink()->videoFrame().isValid() && video->videoSink()->videoFrame().size() == QSize(320, 180),
+                "Linux preview accepts decoded video frames");
+        preview->setPlaying(false);
+        require(!video->videoSink()->videoFrame().isValid(), "stopping Linux preview clears the last camera frame");
+#endif
         theme->setCurrentIndex(theme->findData("light"));
         QApplication::processEvents();
         require(app.palette().color(QPalette::Window).lightness() > 220, "light palette applied");
@@ -60,7 +84,7 @@ static void uiTests(QApplication &app) {
         auto devices = window.findChild<QComboBox *>("cameraDevice");
         devices->addItem("First camera", "camera-one"); devices->addItem("Second camera", "camera-two");
         devices->setCurrentIndex(1);
-        QFile saved(QString::fromStdWString((data / L"app.json").wstring()));
+        QFile saved(QString::fromStdWString(ptz::pathText(data / L"app.json")));
         require(saved.open(QIODevice::ReadOnly), "portable preferences written");
         auto json = QJsonDocument::fromJson(saved.readAll()).object(); saved.close();
         require(json["lastDevice"].toString() == "camera-two" && json["theme"].toString() == "light" &&
@@ -90,6 +114,7 @@ static bool waitFor(const std::function<bool()> &condition, int timeout = 12000)
     while (timer.elapsed() < timeout);
     return false;
 }
+#ifdef _WIN32
 static void hardwareTests() {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     require(SUCCEEDED(hr), "initialize hardware-test COM");
@@ -163,9 +188,19 @@ static void hardwareTests() {
         CoUninitialize();
     } catch (...) { restore.restore(); CoUninitialize(); throw; }
 }
+#endif
 int main(int argc, char **argv) {
-    QApplication app(argc, argv); app.setStyle("Fusion"); app.setFont(QFont("Segoe UI", 10));
+    QApplication app(argc, argv); app.setStyle("Fusion");
+#ifdef _WIN32
+    app.setFont(QFont("Segoe UI", 10));
+#endif
     app.setQuitOnLastWindowClosed(false);
-    try { uiTests(app); if (argc > 1 && std::string(argv[1]) == "--hardware") hardwareTests(); return 0; }
+    try {
+        uiTests(app);
+#ifdef _WIN32
+        if (argc > 1 && std::string(argv[1]) == "--hardware") hardwareTests();
+#endif
+        return 0;
+    }
     catch (const std::exception &e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

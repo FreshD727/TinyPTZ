@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -e
+export APPDIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+export LD_LIBRARY_PATH="$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+for hook in "$APPDIR"/usr/apprun-hooks/*.sh; do
+    [[ ! -f "$hook" ]] || source "$hook"
+done
+export QT_MEDIA_BACKEND="${QT_MEDIA_BACKEND:-gstreamer}"
+export GST_PLUGIN_SYSTEM_PATH_1_0="$APPDIR/usr/lib/gstreamer-1.0"
+export GST_PLUGIN_SCANNER_1_0="$APPDIR/usr/libexec/gst-plugin-scanner"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/TinyPTZ"
+mkdir -p "$cache"
+export GST_REGISTRY_1_0="$cache/gstreamer-registry-v0.7.0.bin"
+exec "$APPDIR/usr/bin/TinyPTZ" "$@"

@@ -549,8 +549,14 @@ void Dock::setPreviewEnabled(bool enabled, HWND owner, int width, int height) {
     worker_->submit("preview", [this, camera, revision, enabled, owner, width, height](ptz::Camera &c) {
         try {
             if (enabled) {
-                tinyobs::connect(c, camera); c.wake(true); c.preview(owner, width, height);
+                tinyobs::connect(c, camera); c.wake(true);
+#ifdef _WIN32
+                c.preview(owner, width, height);
                 if (!c.previewRunning()) throw std::runtime_error("The preview graph did not start. The camera may be in use by another app.");
+#else
+                // Qt Multimedia owns the Linux video stream on the GUI thread.
+                (void)owner; (void)width; (void)height;
+#endif
             }
             else c.stopPreview();
             post([this, revision, enabled] {

@@ -10,11 +10,29 @@
 #include <QSplitter>
 #include <QStyleHints>
 #include <QVBoxLayout>
+#ifdef _WIN32
 #include <dwmapi.h>
+#else
+#include <QCamera>
+#include <QCameraDevice>
+#include <QMediaCaptureSession>
+#include <QMediaDevices>
+#include <QVideoWidget>
+#include <QVideoSink>
+#endif
 #include <algorithm>
 namespace tinyapp {
+static bool systemDark() {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+#else
+    static const bool dark = qApp->palette().color(QPalette::Window).lightness() < 128;
+    return dark;
+#endif
+}
 void applyTheme(const QString &theme) {
-    bool dark = theme == "dark" || (theme == "system" && QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark);
+    const bool nativeDark = systemDark();
+    bool dark = theme == "dark" || (theme == "system" && nativeDark);
     const QString background = dark ? "#101720" : "#f2f5f9";
     const QString panel = dark ? "#182332" : "#ffffff";
     const QString secondary = dark ? "#223247" : "#edf2f8";
@@ -78,20 +96,35 @@ void applyTheme(const QString &theme) {
 PreviewCanvas::PreviewCanvas(QWidget *parent) : QWidget(parent) {
     setObjectName("previewCanvas");
     setMinimumSize(280, 180);
+#ifdef _WIN32
     surface_ = new QWidget(this);
+#else
+    surface_ = new QVideoWidget(this);
+#endif
     surface_->setObjectName("videoSurface");
+#ifdef _WIN32
     surface_->setAttribute(Qt::WA_NativeWindow);
-    surface_->setStyleSheet("background: #070c14; border-radius: 8px;");
     surface_->winId();
+#endif
+    surface_->setStyleSheet("background: #070c14; border-radius: 8px;");
     placeholder_ = new QLabel(surface_);
     placeholder_->setAlignment(Qt::AlignCenter);
     placeholder_->setWordWrap(true);
     placeholder_->setStyleSheet("color: #aabbd0; background: transparent; padding: 20px;");
     setPlaying(false);
 }
-HWND PreviewCanvas::owner() const { return reinterpret_cast<HWND>(surface_->winId()); }
+HWND PreviewCanvas::owner() const {
+#ifdef _WIN32
+    return reinterpret_cast<HWND>(surface_->winId());
+#else
+    return nullptr;
+#endif
+}
 QSize PreviewCanvas::videoSize() const { return surface_->size(); }
 void PreviewCanvas::setPlaying(bool playing, const QString &message) {
+#ifndef _WIN32
+    if (!playing) static_cast<QVideoWidget *>(surface_)->videoSink()->setVideoFrame({});
+#endif
     placeholder_->setVisible(!playing);
     placeholder_->setText(message.isEmpty() ? "Preview is off\n\nConnect your camera, then start the preview." : message);
 }
@@ -127,6 +160,10 @@ Window::Window(std::filesystem::path data, bool discover) {
     previewButton_ = new QPushButton("Start preview", previewCard); previewButton_->setObjectName("previewToggle"); previewButton_->setEnabled(false);
     previewHeader->addWidget(previewButton_); previewLayout->addLayout(previewHeader);
     preview_ = new PreviewCanvas(previewCard); previewLayout->addWidget(preview_, 1);
+#ifndef _WIN32
+    capture_ = new QMediaCaptureSession(this);
+    capture_->setVideoOutput(preview_->videoOutput());
+#endif
     auto caption = new QLabel("Preview is optional. Stop it when OBS is using the camera.", previewCard);
     caption->setProperty("muted", true); caption->setWordWrap(true); previewLayout->addWidget(caption);
     auto panel = new QFrame(splitter); panel->setProperty("card", true); panel->setMinimumWidth(410);
@@ -140,11 +177,19 @@ Window::Window(std::filesystem::path data, bool discover) {
     controls_->connectionChanged = [this](bool connected, const QString &text) {
         connection_->setText(connected ? "Connected" : "Not connected"); connection_->setToolTip(text);
         previewButton_->setEnabled(connected);
+#ifndef _WIN32
+        if (!connected) stopLinuxPreview();
+#endif
     };
     controls_->previewChanged = [this](bool playing, const QString &error) {
+#ifndef _WIN32
+        if (playing) startLinuxPreview();
+        else stopLinuxPreview(error);
+#else
         playing_ = playing; preview_->setPlaying(playing, error);
         previewButton_->setText(playing ? "Stop preview" : "Start preview");
         previewButton_->setEnabled(connection_->text() == "Connected");
+#endif
     };
     preview_->resized = [this](int width, int height) { if (!closing_) controls_->resizePreview(width, height); };
     QObject::connect(previewButton_, &QPushButton::clicked, this, [this] {
@@ -155,17 +200,69 @@ Window::Window(std::filesystem::path data, bool discover) {
     QObject::connect(theme_, &QComboBox::currentIndexChanged, this, [this] {
         controls_->setThemePreference(theme_->currentData().toString()); updateTheme();
     });
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this, [this] { if (theme_->currentData() == "system") updateTheme(); });
+#endif
     updateTheme();
 }
 void Window::updateTheme() {
     auto theme = theme_->currentData().toString(); applyTheme(theme);
-    BOOL dark = theme == "dark" || (theme == "system" && QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark);
+#ifdef _WIN32
+    BOOL dark = theme == "dark" || (theme == "system" && systemDark());
     DwmSetWindowAttribute(reinterpret_cast<HWND>(winId()), 20, &dark, sizeof(dark));
+#endif
 }
-Window::~Window() { controls_->shutdown(); }
+#ifndef _WIN32
+void Window::stopLinuxPreview(const QString &message) {
+    if (camera_) {
+        auto old = camera_; camera_ = nullptr;
+        QObject::disconnect(old, nullptr, this, nullptr);
+        old->stop(); capture_->setCamera(nullptr); old->deleteLater();
+    }
+    playing_ = false; preview_->setPlaying(false, message);
+    previewButton_->setText("Start preview");
+    previewButton_->setEnabled(!closing_ && connection_->text() == "Connected");
+}
+void Window::startLinuxPreview() {
+    stopLinuxPreview();
+    const auto selected = ptz::filePath(controls_->selectedDevice());
+    QCameraDevice match;
+    for (const auto &candidate : QMediaDevices::videoInputs()) {
+        std::error_code error;
+        if (std::filesystem::equivalent(selected, std::filesystem::u8path(candidate.id().toStdString()), error) && !error) {
+            match = candidate; break;
+        }
+    }
+    if (match.isNull()) {
+        stopLinuxPreview("The selected camera is unavailable for preview. Check device permissions and close other video apps.");
+        return;
+    }
+    camera_ = new QCamera(match, this);
+    capture_->setCamera(camera_);
+    QObject::connect(camera_, &QCamera::activeChanged, this, [this](bool active) {
+        playing_ = active; preview_->setPlaying(active);
+        previewButton_->setText(active ? "Stop preview" : "Start preview");
+        previewButton_->setEnabled(!closing_ && connection_->text() == "Connected");
+    });
+    QObject::connect(camera_, &QCamera::errorOccurred, this, [this](QCamera::Error error, const QString &message) {
+        if (error != QCamera::NoError) stopLinuxPreview("Preview failed: " + message);
+    });
+    previewButton_->setEnabled(false);
+    camera_->start();
+}
+#endif
+Window::~Window() {
+#ifndef _WIN32
+    stopLinuxPreview();
+#endif
+    controls_->shutdown();
+}
 void Window::closeEvent(QCloseEvent *event) {
     if (closing_) { event->ignore(); return; }
-    closing_ = true; controls_->shutdown(); event->accept();
+    closing_ = true;
+#ifndef _WIN32
+    stopLinuxPreview();
+#endif
+    controls_->shutdown(); event->accept();
 }
 } // namespace tinyapp

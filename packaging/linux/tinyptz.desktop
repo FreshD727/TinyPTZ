@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Tiny PTZ
+Comment=OBSBOT camera controls, presets and preview
+Exec=TinyPTZ
+Icon=tinyptz
+Terminal=false
+Categories=AudioVideo;Video;
+StartupWMClass=TinyPTZ
