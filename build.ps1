@@ -1,6 +1,10 @@
-param([switch]$Package)
+param([switch]$Package, [switch]$Legacy)
 $ErrorActionPreference='Stop'
 Set-Location $PSScriptRoot
+if (-not $Legacy) {
+    & "$PSScriptRoot\build-desktop.ps1" -Package:$Package
+    exit $LASTEXITCODE
+}
 $vswhere='C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
 $vs=& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if(-not $vs){throw 'Visual Studio C++ Build Tools are required.'}

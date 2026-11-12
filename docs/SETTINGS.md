@@ -67,10 +67,11 @@ This release does not implement the complete OBSBOT Center feature set:
 - LED brightness is read-only, gamma is unavailable on the tested driver, and
   image-style/automatic-zoom requests have no verified device readback.
 
-The desktop settings window is compiled but was not exercised by UI automation,
-per the request to work through application code. Hardware tests use the same
-backend through the CLI and verify configuration changes, restoration, and
-disk-backed preset recall. They do not assess visual tracking quality. The OBS
+The v0.5 standalone app uses the same Qt settings controls as the OBS dock, with
+dark, light and system themes. Position values refresh automatically outside
+active edits. Tests use hidden native/Qt widgets and camera-core calls, without
+desktop UI automation. Hardware tests verify configuration changes, restoration,
+disk-backed presets and the standalone preview. They do not assess visual tracking quality. The OBS
 dock plugin now exposes the same core controls and settings, with Program scene
 preset automation; see [the plugin guide](OBS-PLUGIN.md) for its build and tests.
 

@@ -1,5 +1,6 @@
 #include "camera_worker.hpp"
 #include <algorithm>
+#include <chrono>
 #include <sstream>
 namespace tinyobs {
 CameraWorker::CameraWorker(Error error) {
@@ -11,14 +12,16 @@ CameraWorker::CameraWorker(Error error) {
                 Job job;
                 {
                     std::unique_lock<std::mutex> lock(mutex_);
-                    condition_.wait(lock, [this] { return stopping_ || !jobs_.empty(); });
+                    condition_.wait_for(lock, std::chrono::milliseconds(15), [this] { return stopping_ || !jobs_.empty(); });
                     if (stopping_) break;
-                    job = std::move(jobs_.front());
-                    jobs_.pop_front();
+                    if (!jobs_.empty()) {
+                        job = std::move(jobs_.front());
+                        jobs_.pop_front();
+                    }
                 }
                 try {
                     if (FAILED(hr)) throw std::runtime_error("Cannot initialize camera COM worker.");
-                    job.work(camera);
+                    if (job.work) job.work(camera);
                 } catch (const std::exception &e) {
                     error(e.what());
                 } catch (...) {
@@ -32,6 +35,7 @@ CameraWorker::CameraWorker(Error error) {
             }
         } // Release camera interfaces before uninitializing COM.
         if (SUCCEEDED(hr)) CoUninitialize();
+        finished_.store(true);
     });
 }
 CameraWorker::~CameraWorker() { stop(); }
@@ -59,6 +63,18 @@ void CameraWorker::stop() {
         jobs_.clear();
     }
     condition_.notify_one();
-    if (thread_.joinable()) thread_.join();
+    if (thread_.joinable()) {
+        // Video renderer teardown may send window messages to the UI owner.
+        // Keep its native message queue responsive until COM teardown finishes.
+        while (!finished_.load()) {
+            MsgWaitForMultipleObjectsEx(0, nullptr, 15, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+            MSG message;
+            while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+                if (message.message == WM_QUIT) { PostQuitMessage((int)message.wParam); break; }
+                TranslateMessage(&message); DispatchMessageW(&message);
+            }
+        }
+        thread_.join();
+    }
 }
 } // namespace tinyobs

@@ -40,9 +40,9 @@ static PresetId id(const ptz::Preset &p) { return {p.device, p.name}; }
 static constexpr long properties[] = {CameraControl_Pan, CameraControl_Tilt, CameraControl_Zoom};
 
 Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
-           Host host, bool startDiscovery)
+           Host host, bool startDiscovery, bool standalone)
     : host_(std::move(host)), config_(std::move(config)),
-      sceneGeneration_(std::make_shared<std::atomic<unsigned long long>>(0)) {
+      sceneGeneration_(std::make_shared<std::atomic<unsigned long long>>(0)), standalone_(standalone) {
     setObjectName("tinyPtzDock");
     setMinimumSize(280, 320);
     auto outer = new QVBoxLayout(this);
@@ -55,6 +55,7 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     auto rescan = new QPushButton("Rescan", this);
     connection->addWidget(rescan, 0, 2);
     auto read = new QPushButton("Connect / read", this);
+    if (standalone_) read->setText("Connect");
     read->setObjectName("connectCamera");
     auto wake = new QPushButton("Wake", this);
     auto sleep = new QPushButton("Sleep", this);
@@ -62,6 +63,12 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     connection->addWidget(wake, 1, 1);
     connection->addWidget(sleep, 1, 2);
     outer->addLayout(connection);
+    if (standalone_) {
+        autoConnect_ = new QCheckBox("Connect to my last camera automatically", this);
+        autoConnect_->setObjectName("autoConnectCamera");
+        autoConnect_->setChecked(true);
+        outer->addWidget(autoConnect_);
+    }
     auto tabs = new QTabWidget(this);
     tabs->setObjectName("controlTabs");
     outer->addWidget(tabs, 1);
@@ -91,6 +98,17 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     ptzLayout->addLayout(grid);
     auto readPosition = new QPushButton("Read position", ptzPage);
     ptzLayout->addWidget(readPosition);
+    if (standalone_) {
+        readPosition->hide();
+        auto live = new QLabel("Live camera position", ptzPage);
+        live->setObjectName("livePositionLabel");
+        ptzLayout->addWidget(live);
+        search_ = new QLineEdit(ptzPage);
+        search_->setObjectName("presetSearch");
+        search_->setPlaceholderText("Search presets");
+        search_->setClearButtonEnabled(true);
+        ptzLayout->addWidget(search_);
+    }
     presets_ = new QListWidget(ptzPage);
     presets_->setObjectName("presets");
     ptzLayout->addWidget(presets_, 1);
@@ -124,6 +142,10 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     auto ptzScroll = new QScrollArea;
     ptzScroll->setWidgetResizable(true);
     ptzScroll->setWidget(ptzPage);
+    if (standalone_) {
+        ptzPage->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        ptzScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    }
     tabs->addTab(ptzScroll, "PTZ / presets");
 
     auto settingsPage = new QWidget;
@@ -162,6 +184,10 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     auto settingsScroll = new QScrollArea;
     settingsScroll->setWidgetResizable(true);
     settingsScroll->setWidget(settingsPage);
+    if (standalone_) {
+        settingsPage->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        settingsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    }
     tabs->addTab(settingsScroll, "Settings");
 
     auto scenePage = new QWidget;
@@ -191,6 +217,7 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     sceneLayout->addWidget(sceneStatus_);
     sceneLayout->addStretch();
     tabs->addTab(scenePage, "Scenes");
+    if (standalone_) tabs->setTabVisible(2, false);
     auto backupButtons = new QGridLayout;
     auto backup = new QPushButton("Back up plugin...", this);
     backup->setObjectName("exportConfiguration");
@@ -201,6 +228,7 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     backupButtons->addWidget(backup, 0, 0);
     backupButtons->addWidget(restore, 0, 1);
     outer->addLayout(backupButtons);
+    if (standalone_) { backup->hide(); restore->hide(); }
     status_ = new QLabel("Ready", this);
     status_->setObjectName("cameraStatus");
     status_->setWordWrap(true);
@@ -210,6 +238,8 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     worker_ = std::make_unique<CameraWorker>([this](const std::string &message) {
         post([this, message] {
             edits_.clear(); liveTimer_.stop(); worker_->cancel("live:");
+            connecting_ = false;
+            if (standalone_ && !connected_ && connectionChanged) connectionChanged(false, qs(message));
             status(qs(message), true);
         });
     });
@@ -221,11 +251,24 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     QObject::connect(readSettingsButton, &QPushButton::clicked, this, [this] { readSettings(); });
     QObject::connect(devices_, &QComboBox::currentIndexChanged, this, [this] {
         ++deviceRevision_;
+        ++positionRevision_;
+        connected_ = connecting_ = pollPending_ = false;
         edits_.clear(); liveTimer_.stop();
         // Device-specific pending edits must not spill into a newly selected camera.
         worker_->cancel("live:");
+        worker_->cancel("poll");
+        if (standalone_) {
+            worker_->cancel("preview");
+            worker_->submit("disconnect", [](ptz::Camera &c) { c.disconnect(); });
+            if (previewChanged) previewChanged(false, {});
+            if (connectionChanged) connectionChanged(false, {});
+        }
         presentSettings({});
         for (auto &axis : axes_) configure(axis, 0, 0, 1, 0, false);
+        if (standalone_ && !device().empty()) {
+            lastDevice_ = device(); saveConfig();
+            if (autoConnect_->isChecked()) readCamera();
+        }
     });
     auto power = [this](bool awake) {
         flushLive(true);
@@ -335,6 +378,20 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
     QObject::connect(assign, &QPushButton::clicked, this, [this] { assignScene(); });
     loadConfig(bundledPresets);
     refreshPresets(); refreshScenes();
+    if (standalone_) {
+        QObject::connect(autoConnect_, &QCheckBox::toggled, this, [this](bool enabled) {
+            saveConfig(); if (enabled && !connected_ && !connecting_ && !device().empty()) readCamera();
+        });
+        QObject::connect(search_, &QLineEdit::textChanged, this, [this] { filterPresets(); });
+        positionTimer_.setInterval(400);
+        QObject::connect(&positionTimer_, &QTimer::timeout, this, [this] { pollPosition(); });
+        positionTimer_.start();
+        reconnectTimer_.setInterval(4000);
+        QObject::connect(&reconnectTimer_, &QTimer::timeout, this, [this] {
+            if (!connected_ && !connecting_ && autoConnect_->isChecked() && !lastDevice_.empty()) discover();
+        });
+        if (startDiscovery) reconnectTimer_.start();
+    }
     if (startDiscovery) discover();
 }
 
@@ -344,7 +401,8 @@ void Dock::post(std::function<void()> work) {
 }
 void Dock::status(const QString &text, bool error) {
     status_->setText((error ? "Error: " : "") + text);
-    status_->setStyleSheet(error ? "color: #e87878;" : "");
+    bool dark = palette().color(QPalette::Window).lightness() < 128;
+    status_->setStyleSheet(error ? (dark ? "color: #fda4af;" : "color: #b91c1c;") : "");
 }
 void Dock::run(std::string key, CameraWorker::Work work) {
     if (stopped_) return;
@@ -359,6 +417,7 @@ Dock::Numeric Dock::addNumeric(QGridLayout *layout, int row, const QString &name
     n.slider->setObjectName(objectName + "Slider");
     n.slider->setMinimumWidth(60);
     n.number = new QDoubleSpinBox(parent);
+    if (standalone_) n.number->setButtonSymbols(QAbstractSpinBox::NoButtons);
     n.number->setObjectName(objectName + "Number");
     n.number->setKeyboardTracking(false);
     n.number->setMinimumWidth(72);
@@ -391,6 +450,35 @@ void Dock::discover() {
     run("devices", [this, previous](ptz::Camera &) {
         auto list = ptz::devices();
         post([this, list, previous] {
+            if (standalone_) {
+                auto wanted = lastDevice_.empty() ? previous : lastDevice_;
+                {
+                    QSignalBlocker block(devices_);
+                    devices_->clear();
+                    for (auto &d : list) devices_->addItem(qs(d.name), qs(d.id));
+                    int index = devices_->findData(qs(wanted));
+                    if (index < 0 && wanted.empty()) {
+                        for (int i = 0; i < (int)list.size(); ++i)
+                            if (list[i].name.find(L"Tiny SE") != std::wstring::npos) { index = i; break; }
+                        if (index < 0 && !list.empty()) index = 0;
+                    }
+                    devices_->setCurrentIndex(index);
+                }
+                if (device() != previous) {
+                    ++deviceRevision_; ++positionRevision_;
+                    connected_ = connecting_ = pollPending_ = false;
+                    edits_.clear(); liveTimer_.stop(); worker_->cancel("live:"); worker_->cancel("poll");
+                    worker_->submit("disconnect", [](ptz::Camera &c) { c.disconnect(); });
+                    if (previewChanged) previewChanged(false, {});
+                    if (connectionChanged) connectionChanged(false, {});
+                    presentSettings({});
+                    for (auto &axis : axes_) configure(axis, 0, 0, 1, 0, false);
+                }
+                if (!wanted.empty() && device() == wanted && autoConnect_->isChecked() && !connected_ && !connecting_) readCamera();
+                else if (connected_) status("Camera connected. Position updates automatically.");
+                else if (!connecting_) status(device().empty() ? "Waiting for your last camera. You can also choose another camera." : "Camera ready. Click Connect.");
+                return;
+            }
             devices_->clear();
             for (auto &d : list) devices_->addItem(qs(d.name), qs(d.id));
             int index = devices_->findData(qs(previous));
@@ -401,6 +489,10 @@ void Dock::discover() {
 }
 void Dock::readCamera() {
     flushLive(true); auto camera = device(); auto revision = deviceRevision_;
+    if (standalone_) {
+        if (camera.empty()) { status("Select a camera first."); return; }
+        lastDevice_ = camera; connecting_ = true; saveConfig();
+    }
     run("read", [this, camera, revision](ptz::Camera &c) {
         tinyobs::connect(c, camera);
         auto p = c.read(); std::array<ptz::Range, 3> ranges;
@@ -408,15 +500,81 @@ void Dock::readCamera() {
         auto settings = c.settings();
         post([this, p, ranges, settings, revision] {
             if (revision != deviceRevision_) return;
+            connected_ = true; connecting_ = false;
             presentPosition(p, ranges); presentSettings(settings); status("Camera connected. Sliders apply live.");
+            if (standalone_ && connectionChanged) connectionChanged(true, devices_->currentText());
         });
     });
 }
 void Dock::presentPosition(ptz::Position p, std::array<ptz::Range, 3> ranges) {
+    positionRanges_ = ranges;
     long values[] = {p.pan, p.tilt, p.zoom};
     for (int i = 0; i < 3; ++i)
         configure(axes_[i], ranges[i].min, ranges[i].max, ranges[i].step,
                   values[i], ranges[i].supported);
+}
+void Dock::pollPosition() {
+    if (!standalone_ || stopped_ || !connected_ || connecting_ || pollPending_ || !edits_.empty()) return;
+    for (auto &axis : axes_) if (axis.slider->isSliderDown() || axis.number->hasFocus()) return;
+    auto camera = device(); auto revision = deviceRevision_; auto positionRevision = positionRevision_;
+    pollPending_ = true;
+    worker_->submit("poll", [this, camera, revision, positionRevision](ptz::Camera &c) {
+        try {
+            if (!c.connected() || c.id() != camera) throw std::runtime_error("Camera disconnected.");
+            auto position = c.read();
+            post([this, position, revision, positionRevision] {
+                if (revision != deviceRevision_) return;
+                pollPending_ = false;
+                if (!connected_ || positionRevision != positionRevision_ || !edits_.empty()) return;
+                for (auto &axis : axes_) if (axis.slider->isSliderDown() || axis.number->hasFocus()) return;
+                presentPosition(position, positionRanges_);
+            });
+        } catch (const std::exception &e) {
+            c.disconnect();
+            auto message = std::string(e.what());
+            post([this, revision, message] {
+                if (revision != deviceRevision_) return;
+                connected_ = connecting_ = pollPending_ = false;
+                edits_.clear(); liveTimer_.stop(); worker_->cancel("live:");
+                for (auto &axis : axes_) configure(axis, 0, 0, 1, 0, false);
+                if (connectionChanged) connectionChanged(false, qs(message));
+                if (previewChanged) previewChanged(false, {});
+                status("Camera unavailable. Waiting to reconnect.", true);
+            });
+        }
+    });
+}
+void Dock::setPreviewEnabled(bool enabled, HWND owner, int width, int height) {
+    auto camera = device(); auto revision = deviceRevision_;
+    flushLive(true);
+    worker_->submit("preview", [this, camera, revision, enabled, owner, width, height](ptz::Camera &c) {
+        try {
+            if (enabled) {
+                tinyobs::connect(c, camera); c.wake(true); c.preview(owner, width, height);
+                if (!c.previewRunning()) throw std::runtime_error("The preview graph did not start. The camera may be in use by another app.");
+            }
+            else c.stopPreview();
+            post([this, revision, enabled] {
+                if (revision != deviceRevision_) return;
+                if (previewChanged) previewChanged(enabled, {});
+                status(enabled ? "Preview is running." : "Preview stopped.");
+            });
+        } catch (const std::exception &e) {
+            c.stopPreview(); auto message = std::string(e.what());
+            post([this, revision, message] {
+                if (revision != deviceRevision_) return;
+                if (previewChanged) previewChanged(false, qs(message));
+                status(qs(message), true);
+            });
+        }
+    });
+}
+void Dock::resizePreview(int width, int height) {
+    worker_->submit("preview-size", [width, height](ptz::Camera &c) { c.resizePreview(width, height); });
+}
+void Dock::setThemePreference(const QString &theme) {
+    theme_ = theme == "dark" || theme == "light" ? theme : "system";
+    if (store_) saveConfig();
 }
 void Dock::readSettings() {
     flushLive(true); auto camera = device(); auto revision = deviceRevision_;
@@ -501,6 +659,7 @@ void Dock::stageSetting(bool final) {
 }
 void Dock::stageAxis(int index, bool final) {
     if (updating_ || !axes_[index].number->isEnabled()) return;
+    ++positionRevision_;
     auto key = "axis:" + std::to_string(index);
     auto &edit = edits_[key];
     edit.value = {key, axes_[index].number->value(), false};
@@ -555,7 +714,20 @@ void Dock::refreshPresets() {
         scenePresets_->addItem(qs(p.name) + "  (" + qs(p.device) + ")", i);
     }
     if (presets_->count()) presets_->setCurrentRow(0);
+    filterPresets();
     selectScene();
+}
+void Dock::filterPresets() {
+    if (!search_) return;
+    auto query = search_->text().trimmed();
+    QListWidgetItem *first = nullptr;
+    for (int i = 0; i < presets_->count(); ++i) {
+        auto item = presets_->item(i);
+        bool visible = item->text().contains(query, Qt::CaseInsensitive);
+        item->setHidden(!visible);
+        if (visible && !first) first = item;
+    }
+    if (!presets_->currentItem() || presets_->currentItem()->isHidden()) presets_->setCurrentItem(first);
 }
 void Dock::transferPresets(bool importing) {
     if (!store_) return;
@@ -655,6 +827,7 @@ void Dock::capturePreset(bool replace) {
     });
 }
 void Dock::recall(const ptz::Preset &preset, bool scene) {
+    ++positionRevision_;
     if (!scene) { ++*sceneGeneration_; flushLive(true); }
     else { edits_.clear(); liveTimer_.stop(); worker_->cancel("live:"); }
     auto token = sceneGeneration_->load(); auto generation = sceneGeneration_;
@@ -673,6 +846,10 @@ void Dock::recall(const ptz::Preset &preset, bool scene) {
             if (index < 0) { devices_->addItem("Preset camera", qs(preset.device)); index = devices_->count() - 1; }
             devices_->setCurrentIndex(index);
             presentPosition(position, ranges); presentSettings(values);
+            if (standalone_) {
+                connected_ = true; connecting_ = false; lastDevice_ = preset.device; saveConfig();
+                if (connectionChanged) connectionChanged(true, devices_->currentText());
+            }
             status((scene ? "Scene preset loaded: " : "Preset loaded: ") + label);
         });
     });
@@ -692,8 +869,18 @@ void Dock::loadConfig(const std::filesystem::path &bundledPresets) {
             auto json = document.object();
             rules_.enabled = json["sceneAutomation"].toBool();
             saveCameraSettings = json["saveCameraSettingsWithPresets"].toBool(true);
+            if (standalone_) {
+                lastDevice_ = json["lastDevice"].toString().toStdWString();
+                theme_ = json["theme"].toString("system");
+                if (theme_ != "dark" && theme_ != "light") theme_ = "system";
+                QSignalBlocker autoBlock(autoConnect_);
+                autoConnect_->setChecked(json["autoConnect"].toBool(true));
+            }
             auto path = json["presetFile"].toString();
-            if (!path.isEmpty()) presetPath = path.toStdWString();
+            if (!path.isEmpty()) {
+                presetPath = path.toStdWString();
+                if (presetPath.is_relative()) presetPath = config_.parent_path() / presetPath;
+            }
             for (auto entry : json["assignments"].toArray()) {
                 auto o = entry.toObject();
                 if (o["scene"].toString().isEmpty() || o["preset"].toString().isEmpty()) continue;
@@ -717,7 +904,14 @@ void Dock::loadConfig(const std::filesystem::path &bundledPresets) {
 }
 void Dock::saveConfig() {
     try {
-        writeConfigurationJson(config_, dockConfiguration(store_->path(), rules_, includeSettings_->isChecked()));
+        auto json = dockConfiguration(store_->path(), rules_, includeSettings_->isChecked());
+        if (standalone_) {
+            if (store_->path().parent_path() == config_.parent_path()) json["presetFile"] = fileName(store_->path().filename());
+            json["lastDevice"] = qs(lastDevice_);
+            json["autoConnect"] = autoConnect_->isChecked();
+            json["theme"] = theme_;
+        }
+        writeConfigurationJson(config_, json);
     } catch (const std::exception &e) { status(qs(std::string(e.what())), true); }
 }
 void Dock::refreshScenes() {
@@ -770,6 +964,7 @@ void Dock::assignScene() {
 }
 void Dock::frontendReady() { if (!stopped_) { ready_ = true; refreshScenes(); sceneChanged(); } }
 SceneCatalog Dock::sceneCatalog() const {
+    if (standalone_) return {};
     // OBS module configs live in <OBS config>/plugin_config/tiny-ptz/dock.json.
     auto root = config_.parent_path().parent_path().parent_path();
     auto catalog = readSceneCatalog(root / L"basic" / L"scenes");
@@ -804,6 +999,7 @@ void Dock::sceneChanged() {
 void Dock::shutdown() {
     if (stopped_) return;
     stopped_ = true; ++*sceneGeneration_; liveTimer_.stop(); edits_.clear();
+    positionTimer_.stop(); reconnectTimer_.stop();
     if (worker_) worker_->stop();
 }
 } // namespace tinyobs

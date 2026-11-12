@@ -1,0 +1,15 @@
+Tiny PTZ Qt standalone v0.5.0 validation — 2026-11-12
+Qt 6.6.3 / MSVC x64. Shared camera protocol and preset format retained.
+
+PASS: Qt standalone themes, portable preference/restart persistence, remembered camera, automatic-position UI, native preview host/aspect ratio, preset search and shutdown
+PASS: original camera position, settings and power state restored
+PASS: remembered-camera auto-connect/restart, live PTZ readback, native DirectShow preview running/resize/stop/restart and close while previewing
+
+Preview test: native hidden video owner, DirectShow running-state check, start/stop/resize/restart and close while running.
+Camera tests used a temporary library and restored the original position/settings/power state.
+Desktop UI tests cover dark/light preferences, last camera and auto-connect settings, native aspect ratio, search and restart.
+The release includes Qt/VC runtime DLLs; a clean-path runtime check follows packaging.
+PASS: direct MSVC and CMake Visual Studio builds; CTest core/native settings/Qt desktop 3/3.
+PASS: portable executable starts with only Windows system paths, no Qt SDK/OBS paths, and a different working directory.
+PASS: dark/light native widget renders reviewed; preset data remains byte-identical to the previous portable library.
+PASS: moving a portable data folder preserves relative preset paths, camera preferences and theme.

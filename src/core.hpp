@@ -96,6 +96,10 @@ class Camera {
     std::string bootDiagnostics();
     void preview(HWND owner, int width, int height);
     void resizePreview(int width, int height);
+    bool previewRunning() const {
+        OAFilterState state = State_Stopped;
+        return media_ && SUCCEEDED(media_->GetState(2000, &state)) && state == State_Running;
+    }
     void stopPreview();
     ~Camera() {
         try {

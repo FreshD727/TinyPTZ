@@ -5,6 +5,7 @@
 #include <functional>
 #include <mutex>
 #include <thread>
+#include <atomic>
 
 namespace tinyobs {
 // All DirectShow/KS interfaces are created, used and destroyed in this STA.
@@ -27,6 +28,7 @@ class CameraWorker {
     std::deque<Job> jobs_;
     bool stopping_ = false;
     std::thread thread_;
+    std::atomic<bool> finished_{false};
 };
 inline void connect(ptz::Camera &camera, const std::wstring &device) {
     if (device.empty()) throw std::runtime_error("Select a camera first.");

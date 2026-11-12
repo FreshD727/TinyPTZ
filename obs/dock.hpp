@@ -18,6 +18,7 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QPushButton;
 class QGridLayout;
+class QLineEdit;
 namespace tinyobs {
 struct Scene { std::string uuid; QString name; };
 struct Host {
@@ -28,7 +29,7 @@ struct Host {
 class Dock : public QWidget {
   public:
     Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
-         Host host, bool discover = true);
+         Host host, bool discover = true, bool standalone = false);
     ~Dock() override;
     void frontendReady();
     void sceneChanged();
@@ -38,6 +39,12 @@ class Dock : public QWidget {
     // Worker results are presented only on the UI thread. Also used by offline UI tests.
     void presentSettings(std::vector<ptz::Setting> settings);
     void presentPosition(ptz::Position position, std::array<ptz::Range, 3> ranges);
+    void setPreviewEnabled(bool enabled, HWND owner, int width, int height);
+    void resizePreview(int width, int height);
+    void setThemePreference(const QString &theme);
+    QString themePreference() const { return theme_; }
+    std::function<void(bool, const QString &)> connectionChanged;
+    std::function<void(bool, const QString &)> previewChanged;
   private:
     struct Numeric {
         QSlider *slider = nullptr;
@@ -55,12 +62,20 @@ class Dock : public QWidget {
     std::map<std::string, Edit> edits_;
     std::vector<ptz::Setting> settings_;
     QTimer liveTimer_;
+    QTimer positionTimer_, reconnectTimer_;
     QComboBox *devices_, *choices_, *scenes_, *scenePresets_;
     QCheckBox *automatic_, *includeSettings_, *sceneEnabled_;
     QLabel *status_, *details_, *sceneStatus_;
     QListWidget *presets_;
     QTreeWidget *settingList_;
     QPushButton *apply_, *default_;
+    QCheckBox *autoConnect_ = nullptr;
+    QLineEdit *search_ = nullptr;
+    bool standalone_ = false, connected_ = false, connecting_ = false, pollPending_ = false;
+    std::wstring lastDevice_;
+    QString theme_ = "system";
+    std::array<ptz::Range, 3> positionRanges_{};
+    unsigned long long positionRevision_ = 0;
     Numeric axes_[3], numeric_;
     bool updating_ = false, ready_ = false, stopped_ = false;
     unsigned long long deviceRevision_ = 0;
@@ -71,6 +86,8 @@ class Dock : public QWidget {
     void run(std::string key, CameraWorker::Work work);
     void discover();
     void readCamera();
+    void pollPosition();
+    void filterPresets();
     void readSettings();
     Numeric addNumeric(QGridLayout *layout, int row, const QString &name,
                        const QString &objectName, QWidget *parent);
