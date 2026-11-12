@@ -93,7 +93,7 @@ void obs_module_post_load(void) {
         }
         obs_frontend_add_event_callback(frontendEvent, nullptr);
         callbackInstalled = true;
-        blog(LOG_INFO, "[tiny-ptz] 0.6.2 dock loaded; camera controls use a dedicated worker thread.");
+        blog(LOG_INFO, "[tiny-ptz] 1.0.0 dock loaded; camera controls use a dedicated worker thread.");
     } catch (const std::exception &e) {
         blog(LOG_ERROR, "[tiny-ptz] %s", e.what());
     }

@@ -1,6 +1,6 @@
 # Tiny PTZ
 
-A desktop controller and OBS Studio dock for the **OBSBOT Tiny SE** camera,
+A desktop controller and OBS Studio plugin for the **OBSBOT Tiny SE** camera,
 available for Windows and Linux. Control the camera, save unlimited positions
 and settings, and recall presets automatically when OBS scenes change.
 
@@ -16,7 +16,7 @@ Only the Tiny SE has been tested; support for other OBSBOT models is not claimed
   including image defaults and exposure compensation.
 - Camera boot-position presets, sleep/wake and reconnect to the last camera.
 - Standalone camera preview, preset search and light, dark or system themes.
-- OBS dock with Program-scene preset assignments and full configuration backups.
+- OBS dock with scene preset assignments and full configuration backups.
   Backups can match scenes by name when restored on another computer.
 
 Available settings depend on firmware and the operating-system driver. See
@@ -108,6 +108,12 @@ tests/        Core, UI, backend and OBS module tests
 
 Build scripts remain at the repository root. Generated binaries, SDKs, personal
 configuration and local investigation files are excluded from the source tree.
+
+## AI assistance
+
+This project was developed with substantial assistance from AI tools for implementation, debugging and documentation. AI-assisted code
+can contain mistakes, and compatibility is not guaranteed beyond the tested
+hardware and software configurations. Please report reproducible issues.
 
 ## License
 
