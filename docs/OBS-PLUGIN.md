@@ -1,12 +1,11 @@
-# Tiny PTZ dock for OBS Studio — v0.6.2
+# Tiny PTZ dock for OBS Studio â€” v0.6.2
 
 This guide describes the existing Windows release. The native Linux v0.6.2 port
 has a separate [Linux installation/build guide](OBS-LINUX.md); Windows DLLs are
 not used on Linux.
 
 Native Windows x64 OBS plugin for the OBSBOT Tiny SE. This package targets
-**OBS 31.x with Qt 6.6.3**, matching the local OBS 31.0.0-beta3 runtime used to
-build it. Other OBS/Qt versions require a matching rebuild; do not replace OBS's
+**OBS 31.x with Qt 6.6.3**, using the OBS 31.0.0-beta3 headers pinned by the build script. Other OBS/Qt versions require a matching rebuild; do not replace OBS's
 Qt DLLs with the development package. OBS supplies Qt and the Visual C++ runtime.
 The standalone Tiny PTZ application remains independently portable.
 
@@ -22,7 +21,7 @@ from the plugin installation.
 
 No camera driver, OBSBOT Center SDK or companion process is installed.
 
-Open OBS and enable **Docks → Tiny PTZ**. Drag its title bar to dock it beside
+Open OBS and enable **Docks â†’ Tiny PTZ**. Drag its title bar to dock it beside
 your other OBS panels, or leave it floating. OBS remembers the dock layout.
 To uninstall, close OBS and remove the plugin DLL/data folders you installed.
 Your user presets/configuration can be kept for a later reinstall.
@@ -38,7 +37,7 @@ Choose the Tiny SE and click **Connect / read**. The PTZ sliders apply while
 dragging, with coalesced updates about every 80 ms. Typed PTZ values apply when
 editing finishes. Position values refresh automatically every 400 ms while
 connected, pausing while you edit. Wait for movement to settle before saving.
-Wake and Sleep use the same repaired power commands as Tiny PTZ v0.3.4.
+Wake and Sleep use the shared Tiny SE power implementation.
 
 The **Settings** tab exposes the shared core's tracking modes, human framing,
 composition, image and device settings. Numeric sliders apply live; numeric text,
@@ -60,7 +59,7 @@ it is copied to OBS's plugin configuration folder only if no preset library exis
 Existing plugin configuration is never replaced by installation.
 
 Use **Import presets...** to copy presets from your standalone
-`TinyPTZ-v0.3.4\data\presets.ptz` into the plugin library. Scene recalls reload the
+`data/presets.ptz` into the plugin library. Scene recalls reload the
 active library before resolving their preset. Previously configured external
 libraries remain supported; avoid saving from two applications at once.
 
@@ -161,35 +160,19 @@ Tracking-enabled presets can move again as tracking follows the subject.
 ## Files and build
 
 User files are `dock.json` and `presets.ptz` in the OBS plugin configuration
-directory, normally `%APPDATA%\obs-studio\plugin_config\tiny-ptz` (inside the OBS
+directory, normally `%APPDATA%\obs-studio\plugin_config\tiny-ptz-obs` (inside the OBS
 config directory in portable mode). The JSON stores the selected preset-file path,
 automation switch and scene assignments. Presets use the same UTF-8 v2 format as
 the standalone app. Preset writes use atomic replacement; configuration writes use
 Qt's atomic save facility.
 
-Plugin source is included in `TinyPTZ-plugin-source.zip`. Extract it, install
-Visual Studio C++ Build Tools and CMake, then:
+Build the Windows plugin with `./build-obs.ps1 -Setup -Package`. See
+[BUILDING.md](BUILDING.md) for dependencies, CMake builds and test commands,
+and [RELEASING.md](RELEASING.md) for clean runtime/source archives.
 
-```powershell
-.\build-obs.ps1 -Setup -Package -ObsRoot 'C:\Program Files\obs-studio'
-```
-
-The script downloads SHA-256-checked official OBS source headers and OBS's Qt
-development package into ignored `build/obs-sdk`. Import libraries are generated
-from the installed OBS runtime's public DLL exports, and the plugin uses `/MD` to
-match OBS/Qt. No proprietary OBSBOT binary is linked or redistributed.
-Offline rebuilds omit `-Setup` once dependencies exist. The optional CMake
-`BUILD_OBS_PLUGIN` target also supports installed OBS/Qt SDK packages, or the
-`TINY_OBS_SOURCE_DIR`/`TINY_OBS_LIBRARY_DIR` prepared by this script.
-
-The build runs camera-free worker, scene-rule, persistence and Qt control tests,
-then loads the actual DLL through the installed libobs runtime with a separate
-test frontend. The test frontend DLL is never packaged or installed. Add
-`-HardwareTest` to also test the dock against a connected Tiny SE (a live
-brightness adjustment and scene-driven recall to its original captured position;
-the original camera state is restored). These tests do not manipulate OBS's UI
-or the user's OBS configuration. Native OBS GUI layout/streaming remains a manual
-integration check after installation.
+Default tests use an isolated frontend fixture, which is not packaged. The
+optional `-HardwareTest` controls a connected camera and restores its state.
+Do not infer compatibility with another OBS/Qt build from a successful compile.
 
 The plugin and included source are provided under GPL v2 or later (see
 `LICENSE.txt`), compatible with the linked OBS APIs. Qt remains supplied by OBS.

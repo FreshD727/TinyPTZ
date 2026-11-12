@@ -1,4 +1,4 @@
-# Tiny PTZ OBS plugin for Linux — v0.6.2
+# Tiny PTZ OBS plugin for Linux â€” v0.6.2
 
 Native Linux OBS dock for the OBSBOT Tiny SE: PTZ, tracking/image/device settings,
 unlimited presets, scene automation, full backups and scene-name restore matching.
@@ -27,7 +27,7 @@ tiny-ptz-obs/
   LICENSE.txt
 ```
 
-Start OBS and enable **Docks → Tiny PTZ**. Do not install another copy of this
+Start OBS and enable **Docks â†’ Tiny PTZ**. Do not install another copy of this
 plugin under a different folder name: both would register the same dock.
 The minimal release has an empty initial preset library, without personal data.
 Full sources/build scripts are available in the separate source archive.
@@ -104,8 +104,8 @@ QT_QPA_PLATFORM=offscreen ctest --test-dir build/linux --output-on-failure
 cmake --install build/linux --prefix "$PWD/dist/linux/tiny-ptz-obs"
 ```
 
-Linux support currently targets the OBS plugin, not the standalone DirectShow
-preview application. Windows source/builds remain supported separately.
+The standalone Linux preview application is a separate build; see
+[DESKTOP-LINUX.md](DESKTOP-LINUX.md). The plugin itself only opens camera controls.
 
 ## Verification and limits
 

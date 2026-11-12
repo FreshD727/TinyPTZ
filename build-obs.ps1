@@ -93,21 +93,8 @@ try {
     $env:QT_QPA_PLATFORM_PLUGIN_PATH = $previousPluginPath; $env:QT_FORCE_STDERR_LOGGING = $previousLogging
 }
 if ($Package) {
-    $release = Join-Path $PSScriptRoot 'dist\TinyPTZ-OBS-v0.6.2'
-    New-Item -ItemType Directory -Force "$release\obs-plugins\64bit", "$release\data\obs-plugins\tiny-ptz" | Out-Null
-    Copy-Item -LiteralPath "$out\tiny-ptz.dll" -Destination "$release\obs-plugins\64bit" -Force
-    Copy-Item -LiteralPath docs/OBS-PLUGIN.md -Destination "$release\README.md" -Force
-    Copy-Item -LiteralPath docs/SETTINGS.md -Destination "$release\SETTINGS.md" -Force
-    if (Test-Path -LiteralPath research/obs-plugin-validation.txt) {
-        Copy-Item -LiteralPath research/obs-plugin-validation.txt -Destination "$release\VALIDATION.txt" -Force
-    }
-    Copy-Item -LiteralPath obs/install-obs.ps1 -Destination $release -Force
-    Copy-Item -LiteralPath "$source\COPYING" -Destination "$release\LICENSE.txt" -Force
-    # Ship a snapshot; existing OBS plugin configuration is never overwritten.
-    $presets = Join-Path $PSScriptRoot 'dist\TinyPTZ-v0.3.4\data\presets.ptz'
-    if (Test-Path -LiteralPath $presets) { Copy-Item -LiteralPath $presets -Destination "$release\data\obs-plugins\tiny-ptz\presets.ptz" -Force }
-    else { 'TINY_PTZ_PRESETS 2' | Set-Content -LiteralPath "$release\data\obs-plugins\tiny-ptz\presets.ptz" -Encoding utf8 }
-    Compress-Archive -LiteralPath src,obs,tests,CMakeLists.txt,build-obs.ps1,docs/OBS-PLUGIN.md,docs/SETTINGS.md -DestinationPath "$release\TinyPTZ-plugin-source.zip" -Force
-    Compress-Archive -Path "$release\*" -DestinationPath dist/TinyPTZ-OBS-v0.6.2-Windows-x64.zip -Force
-    Write-Host "OBS plugin package: $release"
+    & python scripts/package_release.py obs-windows --binary "$out\tiny-ptz.dll"
+    if ($LASTEXITCODE -ne 0) { throw 'OBS release packaging failed.' }
+    & python scripts/package_release.py source
+    if ($LASTEXITCODE -ne 0) { throw 'Source packaging failed.' }
 }

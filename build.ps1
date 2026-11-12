@@ -15,7 +15,7 @@ $env:INCLUDE="$vc\include;$kit\Include\$version\ucrt;$kit\Include\$version\share
 $env:LIB="$vc\lib\x64;$kit\Lib\$version\ucrt\x64;$kit\Lib\$version\um\x64"
 $compiler="$vc\bin\Hostx64\x64\cl.exe"
 $common=@('/nologo','/EHsc','/std:c++17','/MT','/O2','/W4','/utf-8','/DUNICODE','/D_UNICODE','/DNOMINMAX','/Isrc')
-New-Item -ItemType Directory -Force build,build\v034,dist\TinyPTZ-v0.3.4 | Out-Null
+New-Item -ItemType Directory -Force build,build\v034 | Out-Null
 & $compiler @common /c src/camera.cpp src/presets.cpp src/protocol.cpp src/settings.cpp /Fobuild\
 if($LASTEXITCODE -ne 0){throw 'Core compilation failed'}
 & "$vc\bin\Hostx64\x64\lib.exe" /nologo /OUT:build/ptz_core.lib build/camera.obj build/presets.obj build/protocol.obj build/settings.obj
@@ -33,19 +33,8 @@ if($LASTEXITCODE -ne 0){throw 'Core tests failed'}
 if($LASTEXITCODE -ne 0){throw 'Settings UI test compilation failed'}
 & .\build\settings_ui_tests.exe
 if($LASTEXITCODE -ne 0){throw 'Settings UI regression failed'}
-Copy-Item -LiteralPath build\v034\TinyPTZ.exe,build\ptzctl.exe,README.md -Destination dist\TinyPTZ-v0.3.4 -Force
-Copy-Item -LiteralPath docs -Destination dist\TinyPTZ-v0.3.4 -Recurse -Force
-New-Item -ItemType Directory -Force dist\TinyPTZ-v0.3.4\research | Out-Null
-Copy-Item -LiteralPath research\NOTES.md,research\hardware-validation.txt,research\settings-validation-final.txt,research\boot-validation.txt,research\image-controls-validation.txt,research\power-video-after.txt,research\position-precision-validation.txt,research\live-slider-validation.txt -Destination dist\TinyPTZ-v0.3.4\research -Force
-$newPresets=Join-Path $PSScriptRoot 'dist\TinyPTZ-v0.3.4\data\presets.ptz'
-if(-not (Test-Path -LiteralPath $newPresets)){
-    foreach($oldPresets in @('dist\TinyPTZ-v0.3.3\data\presets.ptz','dist\TinyPTZ-v0.3.2\data\presets.ptz','dist\TinyPTZ-v0.3.1\data\presets.ptz','dist\TinyPTZ-v0.3\data\presets.ptz','dist\TinyPTZ-v0.2\data\presets.ptz','dist\TinyPTZ\data\presets.ptz','build\data\presets.ptz')){
-        if(Test-Path -LiteralPath $oldPresets){
-            New-Item -ItemType Directory -Force (Split-Path -Parent $newPresets) | Out-Null
-            Copy-Item -LiteralPath $oldPresets -Destination $newPresets
-            break
-        }
-    }
+if($Package){
+    & python scripts/package_release.py desktop-legacy-windows --version 0.3.4 --binary build/v034/TinyPTZ.exe --cli build/ptzctl.exe
+    if($LASTEXITCODE -ne 0){throw 'Legacy release packaging failed'}
 }
-if($Package){Compress-Archive -LiteralPath dist\TinyPTZ-v0.3.4 -DestinationPath dist\TinyPTZ-v0.3.4-Windows-x64.zip -Force}
-Write-Host 'Portable app: dist\TinyPTZ-v0.3.4\TinyPTZ.exe'
+Write-Host 'Legacy app: build\v034\TinyPTZ.exe'

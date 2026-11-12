@@ -59,34 +59,25 @@ try {
     }
 } finally { $env:PATH = $oldPath; $env:QT_QPA_PLATFORM = $oldPlatform; $env:QT_QPA_PLATFORM_PLUGIN_PATH = $oldPluginPath }
 if ($Package) {
-    $release = Join-Path $PSScriptRoot 'dist\TinyPTZ-v0.7.5'
-    New-Item -ItemType Directory -Force $release,"$release\platforms","$release\sources","$release\licenses\Qt","$release\data" | Out-Null
-    Copy-Item -LiteralPath "$out\TinyPTZ.exe","$out\ptzctl.exe",README.md,THIRD-PARTY-NOTICES.md -Destination $release -Force
-    Copy-Item -LiteralPath "$QtRoot\bin\Qt6Core.dll","$QtRoot\bin\Qt6Gui.dll","$QtRoot\bin\Qt6Widgets.dll" -Destination $release -Force
-    Copy-Item -LiteralPath "$QtRoot\plugins\platforms\qwindows.dll" -Destination "$release\platforms" -Force
-    $redist = Get-ChildItem -LiteralPath "$vs\VC\Redist\MSVC" -Directory | Where-Object { $_.Name -match '^\d' } | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty FullName
-    Copy-Item -Path "$redist\x64\Microsoft.VC145.CRT\*.dll" -Destination $release -Force
-    Copy-Item -LiteralPath docs -Destination $release -Recurse -Force
-    if (-not (Test-Path -LiteralPath "$release\data\presets.ptz")) {
-        foreach ($candidate in @('dist\TinyPTZ-v0.3.4\data\presets.ptz','build\data\presets.ptz')) {
-            if (Test-Path -LiteralPath $candidate) { Copy-Item -LiteralPath $candidate -Destination "$release\data\presets.ptz"; break }
-        }
-    }
     $source = Join-Path $PSScriptRoot 'build\desktop-deps\qtbase-everywhere-src-6.6.3.tar.xz'
-    if (-not (Test-Path -LiteralPath $source)) {
-        New-Item -ItemType Directory -Force (Split-Path -Parent $source) | Out-Null
-        & curl.exe -sS -L --fail --retry 2 -o $source 'https://download.qt.io/archive/qt/6.6/6.6.3/submodules/qtbase-everywhere-src-6.6.3.tar.xz'
-        if ($LASTEXITCODE -ne 0) { throw 'Qt source download failed.' }
+    $licenseTemp = Join-Path $PSScriptRoot 'build\desktop-deps\notices'
+    $qtLicenses = Join-Path $licenseTemp 'qtbase-everywhere-src-6.6.3\LICENSES'
+    if (-not (Test-Path -LiteralPath $qtLicenses)) {
+        if (-not (Test-Path -LiteralPath $source)) {
+            New-Item -ItemType Directory -Force (Split-Path -Parent $source) | Out-Null
+            & curl.exe -sS -L --fail --retry 2 -o $source 'https://download.qt.io/archive/qt/6.6/6.6.3/submodules/qtbase-everywhere-src-6.6.3.tar.xz'
+            if ($LASTEXITCODE -ne 0) { throw 'Qt source download failed.' }
+        }
+        if ((Get-FileHash -LiteralPath $source).Hash -ne '0493FD0B380C4EDF8872F011A7F26D245AA4CDD75B349904EF340A22DEDF7462') { throw 'Qt source checksum mismatch.' }
+        New-Item -ItemType Directory -Force $licenseTemp | Out-Null
+        & tar.exe -xf $source -C $licenseTemp qtbase-everywhere-src-6.6.3/LICENSES
+        if ($LASTEXITCODE -ne 0) { throw 'Qt license extraction failed.' }
     }
-    if ((Get-FileHash -LiteralPath $source).Hash -ne '0493FD0B380C4EDF8872F011A7F26D245AA4CDD75B349904EF340A22DEDF7462') { throw 'Qt source checksum mismatch.' }
-    Copy-Item -LiteralPath $source -Destination "$release\sources" -Force
-    $licenseTemp = Join-Path $PSScriptRoot 'build\desktop-deps\notices'; New-Item -ItemType Directory -Force $licenseTemp | Out-Null
-    & tar.exe -xf $source -C $licenseTemp qtbase-everywhere-src-6.6.3/LICENSES
-    if ($LASTEXITCODE -ne 0) { throw 'Qt license extraction failed.' }
-    Copy-Item -Path "$licenseTemp\qtbase-everywhere-src-6.6.3\LICENSES\*" -Destination "$release\licenses\Qt" -Force
-    Copy-Item -LiteralPath "$licenseTemp\qtbase-everywhere-src-6.6.3\LICENSES\GPL-2.0-only.txt" -Destination "$release\LICENSE.txt" -Force
-    Compress-Archive -LiteralPath src,obs,tests,assets,packaging,CMakeLists.txt,build.ps1,build-desktop.ps1,build-linux.sh,build-linux-desktop.sh,README.md,LICENSE.txt,THIRD-PARTY-NOTICES.md,docs -DestinationPath "$release\sources\TinyPTZ-source.zip" -Force
-    if (Test-Path -LiteralPath research/desktop-qt-validation.txt) { Copy-Item -LiteralPath research/desktop-qt-validation.txt -Destination "$release\VALIDATION.txt" -Force }
-    Compress-Archive -LiteralPath $release -DestinationPath dist/TinyPTZ-v0.7.5-Windows-x64.zip -Force
-    Write-Host "Portable Qt app: $release\TinyPTZ.exe"
+    $redist = Get-ChildItem -LiteralPath "$vs\VC\Redist\MSVC" -Directory | Where-Object { $_.Name -match '^\d' } | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty FullName
+    $crt = Get-ChildItem -LiteralPath "$redist\x64" -Directory -Filter 'Microsoft.VC*.CRT' | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty FullName
+    if (-not $crt) { throw 'Visual C++ redistributable runtime was not found.' }
+    & python scripts/package_release.py desktop-windows --binary "$out\TinyPTZ.exe" --qt-root $QtRoot --vc-runtime $crt --qt-licenses $qtLicenses
+    if ($LASTEXITCODE -ne 0) { throw 'Desktop release packaging failed.' }
+    & python scripts/package_release.py source
+    if ($LASTEXITCODE -ne 0) { throw 'Source packaging failed.' }
 }

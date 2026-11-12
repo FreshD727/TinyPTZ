@@ -1,113 +1,116 @@
-# Tiny PTZ Portable
+# Tiny PTZ
 
-A native Qt camera controller for the OBSBOT Tiny SE, with a resizable preview,
-dark/light/system themes, live PTZ controls, tracking/image/device settings and
-unlimited presets. The standalone app and OBS plugin share the same camera core.
+A desktop controller and OBS Studio dock for the **OBSBOT Tiny SE** camera,
+available for Windows and Linux. Control the camera, save unlimited positions
+and settings, and recall presets automatically when OBS scenes change.
 
-The standalone application also runs on Linux. The **v0.7.5 x86_64 AppImage**
-includes Qt and video-preview dependencies and targets Ubuntu 24.04 or compatible
-newer systems. See [Linux standalone instructions](docs/DESKTOP-LINUX.md) for
-launching, portable data storage and building it yourself. The Windows release
-below remains available separately.
+This is an independent project, not affiliated with or endorsed by OBSBOT.
+Only the Tiny SE has been tested; support for other OBSBOT models is not claimed.
 
-## Run the Windows release
+## Features
 
-Extract the whole `TinyPTZ-v0.7.4` folder and open **TinyPTZ.exe**. Keep the Qt
-DLLs and `platforms` folder beside it. The package includes the Qt and Visual C++
-runtimes: OBS Studio, OBSBOT Center, Python, Node and an installer are not required.
-Use a writable folder; portable data stays in `data` beside the executable.
-Move the entire folder to keep its presets and preferences with the app.
+- Live pan, tilt and zoom controls with automatic position readback.
+- Unlimited named presets, optionally including camera settings; import/export
+  libraries in the shared `.ptz` format.
+- Tracking, image and device controls supported by the camera and driver,
+  including image defaults and exposure compensation.
+- Camera boot-position presets, sleep/wake and reconnect to the last camera.
+- Standalone camera preview, preset search and light, dark or system themes.
+- OBS dock with Program-scene preset assignments and full configuration backups.
+  Backups can match scenes by name when restored on another computer.
 
-1. Select a camera and click **Connect** on first use.
-2. Leave **Connect to my last camera automatically** checked to reconnect to it
-   on the next launch. An unplugged camera is retried; another camera is never
-   silently substituted. A different USB port/PC can change its identity, in
-   which case select it again once.
-3. Use the **Theme** selector for System, Light or Dark. The choice is remembered.
-4. Drag Pan/Tilt/Zoom sliders for live movement. Typed positions apply when
-   editing finishes. Position readback updates automatically (about every 400 ms)
-   and pauses while you edit, so it does not fight your input. No Read position
-   button is needed in the standalone app.
-5. Click **Start preview** for the camera picture. The preview is resizable and
-   keeps a 16:9 aspect ratio. Use **Stop preview** when OBS is capturing the camera.
-   Preview is off at launch; camera control does not need a video capture graph.
+Available settings depend on firmware and the operating-system driver. See
+[settings coverage](docs/SETTINGS.md) for details and limitations.
 
-## Settings and presets
+## Download and install
 
-The **Settings** tab provides tracking modes, framing/composition, image controls
-and supported device settings. Select a setting; drag numeric sliders to apply
-live, or use **Apply selected setting** for typed values, named choices and Auto
-mode. **Default selected** and **Restore image defaults** are available.
-Unavailable/read-only controls are disabled. Exposure Compensation is -9 to +9
-with a neutral default of 0. See [settings coverage](docs/SETTINGS.md).
+Download the matching asset from this repository's Releases page. Desktop and
+plugin releases are versioned separately; Windows and Linux binaries may have
+different version numbers.
 
-In **PTZ / presets**, search the library, double-click a preset or use **Load
-preset**. **Save new**, **Update selected**, **Rename** and **Delete** manage an
-arbitrary number of presets. **Save camera settings with presets** captures
-tracking, image and device settings along with PTZ; uncheck for PTZ-only presets.
-Allow the camera to settle before saving. Tracking-enabled presets may move
-again as they follow a subject.
+| Product | Platform | Release asset | Installation |
+| --- | --- | --- | --- |
+| Desktop app | Windows x64 | `TinyPTZ-v…-Windows-x64-Release.zip` | Extract the entire folder and run `TinyPTZ.exe`. |
+| Desktop app | Linux x86-64 | `TinyPTZ-v…-Linux-x86_64.AppImage` or its release ZIP | Make the AppImage executable and open it. |
+| OBS plugin | Windows x64 | `TinyPTZ-OBS-v…-Windows-x64-Release.zip` | Close OBS and copy `tiny-ptz-obs` into `C:\ProgramData\obs-studio\plugins`. |
+| OBS plugin | Linux x86-64 | `TinyPTZ-OBS-v…-Linux-x86_64-Release.zip` | Close OBS and copy `tiny-ptz-obs` into `~/.config/obs-studio/plugins`. |
 
-**Import presets...** merges a `.ptz` library while preserving existing records;
-same-camera duplicate names receive numbered suffixes. **Export presets...**
-saves a separate copy. Camera identities and all saved settings are preserved.
-Existing v1/v2 preset files are supported; the new package carries forward the
-previous portable library without overwriting it. Avoid simultaneous writes to
-one file from multiple app copies.
+Keep all supplied files together. Release packages start with an empty preset
+library; import your existing presets or restore a plugin backup after upgrading.
 
-**Set boot position** writes the selected preset's PTZ to the camera and verifies
-it. The app need not run when the camera boots. The camera's startup tracking mode
-still applies, and image/tracking snapshots remain PC-side preset data.
-**Wake** and **Sleep** use the same corrected Tiny SE power commands as v0.3.4.
+The Linux desktop app adds its menu entry and icon on first launch. If you move
+the AppImage, open it once from its new location to update the launcher.
 
-`data/presets.ptz` stores the library. `data/app.json` stores the theme, last camera,
-auto-connect and preset-capture preferences. Local preset paths are relative to
-the data folder, so moving the portable folder does not break the library.
-The old Win32 v0.3.4 app remains available; its guide is
-[LEGACY-DESKTOP.md](docs/LEGACY-DESKTOP.md).
+### Compatibility
 
-## OBS Studio plugin
+- **Windows desktop:** Windows 10/11 x64. Qt and Visual C++ runtimes are bundled.
+- **Linux desktop:** the supplied AppImage is built on Ubuntu 24.04 with glibc
+  2.39 and Qt 6.4.2. It has also been reported working on Fedora 44. Older systems
+  may need a native build.
+- **Windows OBS plugin:** the supplied binary targets OBS 31.x with Qt 6.6.3.
+- **Linux OBS plugin:** built against native OBS 30.0.2 and Qt 6.4.2 on Ubuntu
+  24.04. Other OBS/Qt builds, including Flatpak, may require a matching rebuild.
 
-The [OBS dock plugin](docs/OBS-PLUGIN.md) remains a separate package:
-`dist/TinyPTZ-OBS-v0.6.2-Windows-x64-Release.zip` for OBS 31.x / Qt 6.6.3 on Windows x64.
-It includes scene-driven preset recall, full configuration backups and scene-name
-matching when restoring on another PC. This standalone update does not replace
-the installed OBS plugin or its configuration.
+OBS supplies the plugin's runtime libraries. Do not copy the standalone app's
+Qt libraries into OBS.
 
-## Build and test
+Platform guides: [Windows desktop](docs/DESKTOP-WINDOWS.md),
+[Linux desktop](docs/DESKTOP-LINUX.md), [Windows OBS](docs/OBS-PLUGIN.md),
+[Linux OBS](docs/OBS-LINUX.md).
 
-For the native Linux OBS plugin, see [OBS-LINUX.md](docs/OBS-LINUX.md).
-The Linux v0.6.2 backend uses V4L2/UVC, supports Windows-preset rebinding and
-builds with `bash build-linux.sh --package`. The standalone preview app remains
-Windows-only. Linux runtime archives and the source archive are separate from
-the existing Windows releases.
+## First use
 
-Use Windows x64, Visual Studio C++ Build Tools and the Windows SDK. First setup:
+1. Connect the Tiny SE, select it and click **Connect** / **Connect / read**.
+2. Drag the PTZ sliders to move the camera. Wait for it to settle, then choose
+   **Save new** to capture a preset.
+3. Enable **Save camera settings with presets** to include supported settings.
+4. In the standalone app, use **Start preview** for video. Stop preview before
+   another application captures the camera. In OBS, use a Video Capture Device
+   source for the picture and enable **Docks → Tiny PTZ** for controls.
+5. In the OBS dock's **Scenes** tab, assign presets to scenes and enable scene
+   automation. It follows the active Program scene, not Studio Mode Preview.
 
-```powershell
-.\build-desktop.ps1 -Setup -Package
+**Set boot position** stores PTZ in the camera itself. Scene automation and
+settings snapshots are application features; they require the app or OBS to run.
+
+## Presets and backups
+
+| Product | Default user data |
+| --- | --- |
+| Windows desktop | `data/` beside `TinyPTZ.exe` |
+| Linux desktop | `$XDG_DATA_HOME/TinyPTZ`, normally `~/.local/share/TinyPTZ` |
+| Windows OBS plugin | `%APPDATA%\obs-studio\plugin_config\tiny-ptz-obs` |
+| Linux OBS plugin | OBS's configuration directory, under `plugin_config/tiny-ptz-obs` |
+
+Back up the desktop data folder to retain presets and preferences. The desktop
+app also accepts `--data-dir <directory>` for a chosen portable data location.
+Use **Back up plugin…** / **Restore plugin…** for presets and scene assignments
+together; a `.ptz` export contains presets only.
+
+Windows and Linux camera IDs differ. On Linux, use **Assign presets to camera…**
+after importing a library from Windows or changing camera identity. Keep only one
+plugin copy installed, and avoid simultaneous writes to the same preset file.
+
+## Development
+
+See [building and testing](docs/BUILDING.md), [contributing](CONTRIBUTING.md),
+and [creating release packages](docs/RELEASING.md).
+
+```text
+assets/       Shared application icons and resources
+docs/         User, build and release guides
+obs/          Shared Qt controls, OBS integration and backup handling
+packaging/    Linux launcher and AppImage runtime tooling
+scripts/      Public source/runtime archive creation
+src/          Camera backends, presets, protocol and desktop app
+tests/        Core, UI, backend and OBS module tests
 ```
 
-The script reuses/downloads the SHA-256-checked official Qt 6.6.3 development
-package under `build/obs-sdk/qt6`; OBS itself is not needed. Later builds can use
-`./build.ps1 -Package`. Use `-QtRoot` on `build-desktop.ps1` for another matching
-Qt development folder. `./build.ps1 -Legacy -Package` builds the older Win32 app.
-CMake also supports `BUILD_QT_DESKTOP=ON` (default) with `CMAKE_PREFIX_PATH` pointing
-to Qt; `BUILD_QT_DESKTOP=OFF` selects the legacy UI.
+Build scripts remain at the repository root. Generated binaries, SDKs, personal
+configuration and local investigation files are excluded from the source tree.
 
-The build runs protocol/preset tests, shared Qt control and backup tests, and
-standalone theme/preferences/preview-host regression tests. Add `-HardwareTest`
-to `build-desktop.ps1` to test auto-connect/restart, live measured position updates,
-DirectShow preview start/stop/resize/restart and closing while previewing against
-a connected Tiny SE. The test restores original camera settings/position/power
-and uses a temporary preset library. Close other video capture apps before that
-explicit preview test.
+## License
 
-The CLI `ptzctl.exe` remains available for automation; `ptzctl help` lists commands.
-Camera work runs on a dedicated COM STA thread, with coalesced writes, idle
-position reads and verified final settings. The GUI remains responsive during
-USB operations and preview startup/teardown.
-
-Application source, Qt Base source, license texts and runtime provenance are
-included; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). No proprietary
-OBSBOT binary is loaded or distributed.
+Tiny PTZ is licensed under **GPL version 2 or later**; see [LICENSE.txt](LICENSE.txt).
+See [third-party notices](THIRD-PARTY-NOTICES.md) for Qt, OBS and runtime provenance.
+No proprietary OBSBOT binaries or SDK are distributed with the application.

@@ -1,8 +1,0 @@
-PASS anti_flicker=2 auto=0
-PASS anti_flicker=1 auto=0
-PASS brightness=52 auto=0
-PASS white_balance=5000 auto=1
-PASS gesture_zoom=1 auto=0
-PASS composition_x=0 auto=0
-PASS ai_mode=0 auto=0
-PASS: settings read/write/restore and disk-backed settings preset recall

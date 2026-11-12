@@ -7,13 +7,6 @@ cmake -S "$root" -B "$build" -G Ninja -DBUILD_QT_DESKTOP=OFF -DBUILD_OBS_PLUGIN=
 cmake --build "$build" --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-4}"
 QT_QPA_PLATFORM=offscreen ctest --test-dir "$build" --output-on-failure
 if [[ "${1:-}" == "--package" ]]; then
-    arch="$(uname -m)"
-    parent="$root/dist/TinyPTZ-OBS-v0.6.2-Linux-$arch"
-    stage="$parent/tiny-ptz-obs"
-    cmake --install "$build" --prefix "$stage"
-    strip --strip-unneeded "$stage/bin/64bit/tiny-ptz-obs.so"
-    archive="$root/dist/TinyPTZ-OBS-v0.6.2-Linux-$arch-Release.tar.gz"
-    tar -czf "$archive" -C "$parent" tiny-ptz-obs
-    (cd "$parent" && cmake -E tar cf "$root/dist/TinyPTZ-OBS-v0.6.2-Linux-$arch-Release.zip" --format=zip tiny-ptz-obs)
-    printf '\nLinux plugin: %s\n' "$archive"
+    python3 scripts/package_release.py obs-linux --binary "$build/tiny-ptz-obs.so"
+    python3 scripts/package_release.py source
 fi

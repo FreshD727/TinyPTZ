@@ -1,4 +1,4 @@
-# Tiny PTZ for Linux — v0.7.5
+# Tiny PTZ for Linux â€” v0.7.5
 
 Standalone Qt controller for the OBSBOT Tiny SE with live PTZ controls, unlimited
 presets, tracking/image/device settings, camera auto-connect, dark/light/system
@@ -8,8 +8,8 @@ Preview opens the exact V4L2 video node selected by the camera controls, using a
 direct GStreamer capture/decode pipeline. Preview no longer matches camera names
 or Qt's opaque IDs, so identically named devices are supported. Software rendering
 is retained. Preview becomes live only after decoding a frame; missing/stalled
-streams time out with an error. The user confirmed this preview works on Fedora 44
-with v0.7.3. v0.7.5 adds a matching application icon and launcher registration.
+streams time out with an error. The application includes its icon and registers
+its launcher automatically as described below.
 
 ## Run the AppImage
 
@@ -89,9 +89,9 @@ personal presets, build tools or compiler files are included in the AppImage.
 `--check-preview-runtime` streams a generated pattern through MJPEG encoding,
 decoding and the preview surface, then exits. It does not open a physical camera.
 
-Native GUI/core/backend tests and packaged-runtime checks are run in WSL.
-Physical Tiny SE video capture and PTZ operation on Linux require a separate
-hardware check; the WSL build environment does not currently expose that camera.
+For automated checks and hardware-test guidance, see [BUILDING.md](BUILDING.md).
+When reporting a camera issue, include the distribution, camera firmware, device
+node and whether another application is capturing its video stream.
 
 GPL version 2 or later; see LICENSE.txt. Third-party license notices are included
 under `usr/share/doc` inside the AppImage. Full application source is supplied

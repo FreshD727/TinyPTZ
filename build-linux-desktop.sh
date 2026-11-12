@@ -50,3 +50,5 @@ QT_QPA_PLATFORM=offscreen "$OUTPUT" --appimage-extract-and-run --check-runtime -
 QT_QPA_PLATFORM=offscreen "$OUTPUT" --appimage-extract-and-run --check-preview-runtime --data-dir "$build/runtime-check-data"
 cp "$root/docs/DESKTOP-LINUX.md" "$root/dist/TinyPTZ-v0.7.5-Linux-README.md"
 sha256sum "$OUTPUT"
+python3 "$root/scripts/package_release.py" desktop-linux --binary "$OUTPUT"
+python3 "$root/scripts/package_release.py" source

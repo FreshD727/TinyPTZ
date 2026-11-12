@@ -1,6 +1,6 @@
 # Camera settings and preset coverage
 
-Open **Settings...**, select Tracking, Image, or Device, select a row, edit its
+Open the **Settings** tab, select Tracking, Image, or Device, select a row, edit its
 value and choose **Apply selected setting**. Automatic is enabled only for
 controls whose Windows driver advertises it. Unsupported settings are disabled.
 Writes with readable state must pass camera readback before reporting success.
@@ -25,8 +25,7 @@ not establish that Tiny SE firmware implements its subject recognition.
 
 ## Saving settings with presets
 
-The main window's **Include tracking, image and device settings when saving
-presets** checkbox defaults to checked. Save and Update capture all available
+The main window's **Save camera settings with presets** checkbox defaults to checked. Save and Update capture all available
 readable/writable settings, including automatic/manual flags. Set-only values
 are included only after this app has requested them in the current connection.
 They are labeled **requested**, because a successful USB write cannot establish

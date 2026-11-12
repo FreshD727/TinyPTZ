@@ -2,3 +2,6 @@
 *.exe binary
 *.dll binary
 *.zip binary
+*.png binary
+*.ico binary
+*.AppImage binary
