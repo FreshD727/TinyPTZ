@@ -6,8 +6,10 @@ class QLabel;
 class QPushButton;
 class QComboBox;
 #ifndef _WIN32
+#include <QTimer>
 class QCamera;
 class QMediaCaptureSession;
+class QVideoSink;
 #endif
 namespace tinyapp {
 void applyTheme(const QString &theme);
@@ -17,6 +19,11 @@ class PreviewCanvas : public QWidget {
     HWND owner() const;
     QSize videoSize() const;
     QWidget *videoOutput() const { return surface_; }
+#ifndef _WIN32
+    QVideoSink *videoSink() const;
+    std::function<void()> frameReady;
+    std::function<void(const QString &)> frameError;
+#endif
     void setPlaying(bool playing, const QString &message = {});
     std::function<void(int, int)> resized;
   protected:
@@ -43,6 +50,8 @@ class Window : public QMainWindow {
 #ifndef _WIN32
     QCamera *camera_ = nullptr;
     QMediaCaptureSession *capture_ = nullptr;
+    QTimer previewWatchdog_;
+    bool previewRequested_ = false;
     void startLinuxPreview();
     void stopLinuxPreview(const QString &message = {});
 #endif

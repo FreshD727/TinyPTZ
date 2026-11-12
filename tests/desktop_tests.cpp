@@ -17,7 +17,6 @@
 #include <QSignalBlocker>
 #include <QDir>
 #ifndef _WIN32
-#include <QVideoWidget>
 #include <QVideoSink>
 #include <QVideoFrame>
 #include <QVideoFrameFormat>
@@ -61,17 +60,36 @@ static void uiTests(QApplication &app) {
         auto size = preview->videoSize();
         require(std::abs(size.width() * 9 - size.height() * 16) <= 16, "preview retains 16:9 aspect ratio");
 #ifndef _WIN32
-        auto video = qobject_cast<QVideoWidget *>(preview->videoOutput());
-        require(video && video->videoSink(), "Linux preview has a Qt video sink");
+        auto sink = preview->videoSink();
+        require(sink && !sink->rhi(), "Linux preview uses a CPU sink without a GPU rendering context");
         QVideoFrame frame(QVideoFrameFormat(QSize(320, 180), QVideoFrameFormat::Format_BGRA8888));
         require(frame.map(QVideoFrame::WriteOnly), "synthetic preview frame maps");
-        std::fill(frame.bits(0), frame.bits(0) + frame.mappedBytes(0), 128);
-        frame.unmap(); video->videoSink()->setVideoFrame(frame);
+        QImage pixels(frame.bits(0), frame.width(), frame.height(), frame.bytesPerLine(0), QImage::Format_ARGB32);
+        const QColor expected(36, 172, 84); pixels.fill(expected);
+        frame.unmap(); sink->setVideoFrame(frame);
         preview->setPlaying(true); QApplication::processEvents();
-        require(video->videoSink()->videoFrame().isValid() && video->videoSink()->videoFrame().size() == QSize(320, 180),
+        require(sink->videoFrame().isValid() && sink->videoFrame().size() == QSize(320, 180),
                 "Linux preview accepts decoded video frames");
+        const auto rendered = preview->videoOutput()->grab().toImage();
+        require(rendered.pixelColor(rendered.width() / 2, rendered.height() / 2) == expected,
+                "software preview paints actual frame pixels instead of a black GPU surface");
+        preview->videoOutput()->grab().save("build/desktop/linux-software-preview.png");
+        for (auto format : {QVideoFrameFormat::Format_YUYV, QVideoFrameFormat::Format_NV12}) {
+            QVideoFrame yuv(QVideoFrameFormat(QSize(320, 180), format));
+            require(yuv.map(QVideoFrame::WriteOnly), "camera YUV frame maps");
+            for (int plane = 0; plane < yuv.planeCount(); ++plane)
+                std::fill(yuv.bits(plane), yuv.bits(plane) + yuv.mappedBytes(plane), 128);
+            yuv.unmap(); sink->setVideoFrame(yuv); QApplication::processEvents();
+            const auto painted = preview->videoOutput()->grab().toImage();
+            const auto color = painted.pixelColor(painted.width() / 2, painted.height() / 2);
+            require(color.red() > 100 && color.green() > 100 && color.blue() > 100,
+                    "camera YUV formats decode and paint without a GPU context");
+        }
         preview->setPlaying(false);
-        require(!video->videoSink()->videoFrame().isValid(), "stopping Linux preview clears the last camera frame");
+        require(!sink->videoFrame().isValid(), "stopping Linux preview clears the last camera frame");
+        const auto stopped = preview->videoOutput()->grab().toImage();
+        require(stopped.pixelColor(stopped.width() / 2, stopped.height() / 2) != expected,
+                "stopped preview clears painted camera pixels");
 #endif
         theme->setCurrentIndex(theme->findData("light"));
         QApplication::processEvents();

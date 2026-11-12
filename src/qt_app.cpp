@@ -5,7 +5,7 @@
 #include <QStandardPaths>
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
-    app.setApplicationName("TinyPTZ"); app.setApplicationDisplayName("Tiny PTZ"); app.setApplicationVersion("0.7.0");
+    app.setApplicationName("TinyPTZ"); app.setApplicationDisplayName("Tiny PTZ"); app.setApplicationVersion("0.7.1");
     app.setStyle("Fusion");
 #ifdef _WIN32
     app.setFont(QFont("Segoe UI", 10));

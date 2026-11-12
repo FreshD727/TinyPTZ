@@ -562,7 +562,9 @@ void Dock::setPreviewEnabled(bool enabled, HWND owner, int width, int height) {
             post([this, revision, enabled] {
                 if (revision != deviceRevision_) return;
                 if (previewChanged) previewChanged(enabled, {});
+#ifdef _WIN32
                 status(enabled ? "Preview is running." : "Preview stopped.");
+#endif
             });
         } catch (const std::exception &e) {
             c.stopPreview(); auto message = std::string(e.what());

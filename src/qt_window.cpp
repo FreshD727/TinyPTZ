@@ -10,6 +10,7 @@
 #include <QSplitter>
 #include <QStyleHints>
 #include <QVBoxLayout>
+#include <QPainter>
 #ifdef _WIN32
 #include <dwmapi.h>
 #else
@@ -17,11 +18,46 @@
 #include <QCameraDevice>
 #include <QMediaCaptureSession>
 #include <QMediaDevices>
-#include <QVideoWidget>
 #include <QVideoSink>
+#include <QVideoFrame>
+#include <QDebug>
 #endif
 #include <algorithm>
 namespace tinyapp {
+#ifndef _WIN32
+// A plain sink requests CPU frames instead of importing camera textures into
+// Qt's RHI/Wayland renderer. The resulting image uses normal QWidget painting.
+class SoftwareVideoSurface : public QWidget {
+  public:
+    explicit SoftwareVideoSurface(QWidget *parent) : QWidget(parent), sink_(this) {
+        setAttribute(Qt::WA_OpaquePaintEvent);
+        QObject::connect(&sink_, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
+            if (!frame.isValid()) { image_ = {}; update(); return; }
+            auto image = frame.toImage();
+            if (image.isNull()) {
+                if (failed) failed(QString("Cannot decode preview frame (pixel format %1).").arg(int(frame.pixelFormat())));
+                return;
+            }
+            image_ = std::move(image); update();
+            if (ready) ready();
+        });
+    }
+    QVideoSink *sink() { return &sink_; }
+    std::function<void()> ready;
+    std::function<void(const QString &)> failed;
+  protected:
+    void paintEvent(QPaintEvent *) override {
+        QPainter painter(this); painter.fillRect(rect(), QColor("#070c14"));
+        if (image_.isNull()) return;
+        QSize fit = image_.size().scaled(size(), Qt::KeepAspectRatio);
+        QRect target(QPoint((width() - fit.width()) / 2, (height() - fit.height()) / 2), fit);
+        painter.drawImage(target, image_);
+    }
+  private:
+    QVideoSink sink_;
+    QImage image_;
+};
+#endif
 static bool systemDark() {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
@@ -99,7 +135,10 @@ PreviewCanvas::PreviewCanvas(QWidget *parent) : QWidget(parent) {
 #ifdef _WIN32
     surface_ = new QWidget(this);
 #else
-    surface_ = new QVideoWidget(this);
+    auto software = new SoftwareVideoSurface(this);
+    software->ready = [this] { if (frameReady) frameReady(); };
+    software->failed = [this](const QString &message) { if (frameError) frameError(message); };
+    surface_ = software;
 #endif
     surface_->setObjectName("videoSurface");
 #ifdef _WIN32
@@ -121,9 +160,12 @@ HWND PreviewCanvas::owner() const {
 #endif
 }
 QSize PreviewCanvas::videoSize() const { return surface_->size(); }
+#ifndef _WIN32
+QVideoSink *PreviewCanvas::videoSink() const { return static_cast<SoftwareVideoSurface *>(surface_)->sink(); }
+#endif
 void PreviewCanvas::setPlaying(bool playing, const QString &message) {
 #ifndef _WIN32
-    if (!playing) static_cast<QVideoWidget *>(surface_)->videoSink()->setVideoFrame({});
+    if (!playing) videoSink()->setVideoFrame({});
 #endif
     placeholder_->setVisible(!playing);
     placeholder_->setText(message.isEmpty() ? "Preview is off\n\nConnect your camera, then start the preview." : message);
@@ -162,7 +204,12 @@ Window::Window(std::filesystem::path data, bool discover) {
     preview_ = new PreviewCanvas(previewCard); previewLayout->addWidget(preview_, 1);
 #ifndef _WIN32
     capture_ = new QMediaCaptureSession(this);
-    capture_->setVideoOutput(preview_->videoOutput());
+    capture_->setVideoSink(preview_->videoSink());
+    previewWatchdog_.setSingleShot(true); previewWatchdog_.setInterval(7000);
+    QObject::connect(&previewWatchdog_, &QTimer::timeout, this, [this] {
+        stopLinuxPreview(playing_ ? "Preview stopped receiving frames. Close other camera apps and try again."
+                                  : "The camera opened but supplied no video frames. Close other camera apps and try again.");
+    });
 #endif
     auto caption = new QLabel("Preview is optional. Stop it when OBS is using the camera.", previewCard);
     caption->setProperty("muted", true); caption->setWordWrap(true); previewLayout->addWidget(caption);
@@ -174,6 +221,22 @@ Window::Window(std::filesystem::path data, bool discover) {
     splitter->addWidget(previewCard); splitter->addWidget(panel); splitter->setStretchFactor(0, 3); splitter->setStretchFactor(1, 2);
     splitter->setSizes({660, 460}); layout->addWidget(splitter, 1); setCentralWidget(central);
     theme_->setCurrentIndex(std::max(0, theme_->findData(controls_->themePreference())));
+#ifndef _WIN32
+    preview_->frameReady = [this] {
+        if (!previewRequested_ || !camera_) return;
+        previewWatchdog_.start();
+        if (playing_) return;
+        playing_ = true; preview_->setPlaying(true);
+        previewButton_->setText("Stop preview"); previewButton_->setEnabled(true);
+        controls_->setPreviewStatus("Preview is live.");
+        const auto frame = preview_->videoSink()->videoFrame();
+        qInfo() << "TinyPTZ preview: first decoded frame" << frame.size() << "format" << frame.pixelFormat();
+    };
+    preview_->frameError = [this](const QString &message) {
+        auto failed = camera_;
+        QTimer::singleShot(0, this, [this, failed, message] { if (failed && camera_ == failed) stopLinuxPreview(message); });
+    };
+#endif
     controls_->connectionChanged = [this](bool connected, const QString &text) {
         connection_->setText(connected ? "Connected" : "Not connected"); connection_->setToolTip(text);
         previewButton_->setEnabled(connected);
@@ -193,6 +256,9 @@ Window::Window(std::filesystem::path data, bool discover) {
     };
     preview_->resized = [this](int width, int height) { if (!closing_) controls_->resizePreview(width, height); };
     QObject::connect(previewButton_, &QPushButton::clicked, this, [this] {
+#ifndef _WIN32
+        if (previewRequested_) { stopLinuxPreview(); return; }
+#endif
         previewButton_->setEnabled(false);
         auto size = preview_->videoSize();
         controls_->setPreviewEnabled(!playing_, preview_->owner(), size.width(), size.height());
@@ -214,6 +280,7 @@ void Window::updateTheme() {
 }
 #ifndef _WIN32
 void Window::stopLinuxPreview(const QString &message) {
+    previewWatchdog_.stop(); previewRequested_ = false;
     if (camera_) {
         auto old = camera_; camera_ = nullptr;
         QObject::disconnect(old, nullptr, this, nullptr);
@@ -222,6 +289,8 @@ void Window::stopLinuxPreview(const QString &message) {
     playing_ = false; preview_->setPlaying(false, message);
     previewButton_->setText("Start preview");
     previewButton_->setEnabled(!closing_ && connection_->text() == "Connected");
+    if (controls_) controls_->setPreviewStatus(message.isEmpty() ? "Preview stopped." : message, !message.isEmpty());
+    if (!message.isEmpty()) qWarning() << "TinyPTZ preview:" << message;
 }
 void Window::startLinuxPreview() {
     stopLinuxPreview();
@@ -240,14 +309,18 @@ void Window::startLinuxPreview() {
     camera_ = new QCamera(match, this);
     capture_->setCamera(camera_);
     QObject::connect(camera_, &QCamera::activeChanged, this, [this](bool active) {
-        playing_ = active; preview_->setPlaying(active);
-        previewButton_->setText(active ? "Stop preview" : "Start preview");
-        previewButton_->setEnabled(!closing_ && connection_->text() == "Connected");
+        // Camera activation alone does not mean it is delivering video.
+        if (!active && playing_) stopLinuxPreview("The camera stopped its video stream.");
     });
     QObject::connect(camera_, &QCamera::errorOccurred, this, [this](QCamera::Error error, const QString &message) {
         if (error != QCamera::NoError) stopLinuxPreview("Preview failed: " + message);
     });
-    previewButton_->setEnabled(false);
+    previewRequested_ = true;
+    preview_->setPlaying(false, "Starting preview… Waiting for the first video frame.");
+    previewButton_->setText("Stop preview"); previewButton_->setEnabled(true);
+    controls_->setPreviewStatus("Starting preview… Waiting for video frames.");
+    qInfo() << "TinyPTZ preview: starting" << match.id() << "backend" << qgetenv("QT_MEDIA_BACKEND");
+    previewWatchdog_.start();
     camera_->start();
 }
 #endif

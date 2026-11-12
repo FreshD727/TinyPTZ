@@ -1,4 +1,4 @@
-# Linux standalone v0.7.0 validation
+# Linux standalone v0.7.1 validation
 
 Built in Ubuntu 24.04 WSL, GCC 13, glibc 2.39 and Qt 6.4.2.
 
@@ -13,7 +13,7 @@ Built in Ubuntu 24.04 WSL, GCC 13, glibc 2.39 and Qt 6.4.2.
 - Desktop GUI tests also pass with the AppDir's Qt libraries, Qt plugins and
   GStreamer dependencies, rather than the development Qt installation.
 - AppImage extraction/run launch check passes. Loader diagnostics resolve Qt
-  Core/Gui/Widgets, Multimedia, MultimediaWidgets, offscreen and the GStreamer
+  Core/Gui/Widgets, Multimedia, offscreen and the GStreamer
   media plugin inside the extracted image.
 - Windows standalone regression build/tests passed after the shared Qt port.
 - Existing Linux OBS plugin CTest: 4/4 passed.
@@ -31,3 +31,16 @@ Logs (generated under build/): linux-desktop-final-tests.log,
 linux-appdir-check.log, linux-appimage-runtime.log, linux-appimage-final-build.log,
 linux-appimage-final-check.log, linux-plugin-desktop-regression.log and
 desktop/linux-desktop-regression.log.
+
+## v0.7.1 black-preview correction
+
+Linux preview uses a plain QVideoSink and QPainter image rendering, bypassing
+QVideoWidget/RHI texture presentation. Tests verify actual RGB painted pixels
+and CPU conversion/painting of YUYV and NV12 frames with no RHI context, plus
+clearing on stop. The AppDir GUI tests pass using bundled Qt and GStreamer.
+Camera activation no longer means live video: the first decoded frame confirms
+live preview and a seven-second watchdog reports absent/stalled frames.
+Windows regression tests pass. The reported Fedora 44 laptop is not locally
+available; this candidate must still be verified with its physical camera.
+Logs: build/linux-software-preview-tests.log, build/linux-preview-v071-package.log,
+build/desktop/software-preview-regression.log.
