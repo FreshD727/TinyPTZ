@@ -76,6 +76,65 @@ void hardwareTest(Camera &c) {
         throw;
     }
 }
+void smallStepTest(Camera &c) {
+    bool wasSleeping = c.sleeping();
+    c.wake(true);
+    settle();
+    auto original = c.read();
+    auto restore = [&] {
+        c.move(original);
+        c.waitForPosition(original);
+        if (wasSleeping)
+            c.wake(false);
+    };
+    try {
+        for (auto axis : {CameraControl_Pan, CameraControl_Tilt}) {
+            auto r = c.range(axis);
+            auto start = axis == CameraControl_Pan ? original.pan : original.tilt;
+            auto step = start + r.step <= r.max ? r.step : -r.step;
+            for (int i = 0; i < 16; ++i) {
+                c.setAxis(axis, start + (i % 2 == 0 ? step : 0));
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                auto actual = c.read();
+                auto held = axis == CameraControl_Pan ? actual.tilt : actual.pan;
+                auto expected = axis == CameraControl_Pan ? original.tilt : original.pan;
+                if (held != expected)
+                    throw std::runtime_error("Small-step movement changed the untouched axis");
+            }
+            c.move(original);
+            c.waitForPosition(original);
+            std::cout << (axis == CameraControl_Pan ? "Pan" : "Tilt")
+                      << ": 16 small changes preserved the other axis\n";
+            for (int offset : {1, 2, 1, -1, -2, -1}) {
+                auto value = start + offset * r.step;
+                if (value < r.min || value > r.max)
+                    continue;
+                auto target = original;
+                if (axis == CameraControl_Pan)
+                    target.pan = value;
+                else
+                    target.tilt = value;
+                c.setAxis(axis, value);
+                c.waitForPosition(target);
+                c.setAxis(axis, value); // A slow slider's duplicate release value.
+                settle();
+                c.waitForPosition(target);
+            }
+            c.move(original);
+            c.waitForPosition(original);
+            std::cout << "Slow changes and repeated release targets held position\n";
+            c.setAxis(axis, start + step);
+            c.setAxis(axis, start);
+            c.waitForPosition(original);
+            std::cout << "Immediate reversal returned to the starting target\n";
+        }
+        restore();
+        std::cout << "PASS: small-step PTZ isolation; original position and power restored\n";
+    } catch (...) {
+        restore();
+        throw;
+    }
+}
 void liveSettingsTest(Camera &c) {
     bool asleep = c.sleeping();
     c.wake(true);
@@ -384,6 +443,7 @@ int wmain(int argc, wchar_t **argv) {
                    L"temporarily, then restores)\n  ptzctl image-defaults\n  ptzctl "
                    L"image-controls-test\n  ptzctl boot-read\n  ptzctl set-boot NAME\n  ptzctl "
                    L"boot-test (temporarily changes boot configuration and PTZ, then restores)\n  "
+                   L"ptzctl small-step-test (temporarily moves each axis one step, then restores)\n"
                    L"ptzctl power-session (stdin: wake / sleep / diagnostics / quit)\n";
         } else if (cmd == L"devices") {
             for (auto &d : devices())
@@ -395,7 +455,7 @@ int wmain(int argc, wchar_t **argv) {
                 cmd != L"boot-read" && cmd != L"image-defaults" && cmd != L"boot-test" &&
                 cmd != L"set-boot" && cmd != L"image-controls-test" && cmd != L"power-session" &&
                 cmd != L"position-details" && cmd != L"position-test" &&
-                cmd != L"live-settings-test")
+                cmd != L"live-settings-test" && cmd != L"small-step-test")
                 throw std::runtime_error("Unknown command; use --help");
             std::wstring id, name;
             SettingValue setting;
@@ -436,7 +496,9 @@ int wmain(int argc, wchar_t **argv) {
                     "Tiny SE not found. Use devices, then --device with its exact ID.");
             Camera c;
             c.connect(id);
-            if (cmd == L"live-settings-test") {
+            if (cmd == L"small-step-test") {
+                smallStepTest(c);
+            } else if (cmd == L"live-settings-test") {
                 liveSettingsTest(c);
             } else if (cmd == L"position-test") {
                 positionTest(c);

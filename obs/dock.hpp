@@ -53,6 +53,7 @@ class Dock : public QWidget {
         QDoubleSpinBox *number = nullptr;
         double low = 0, step = 1;
         int ticks = 0;
+        bool numberEdited = false;
     };
     struct Edit { ptz::SettingValue value; bool final = false; qint64 changed = 0, sent = -1000; bool dirty = true; };
     Host host_;

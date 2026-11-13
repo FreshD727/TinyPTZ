@@ -57,6 +57,7 @@ class Camera {
     ComPtr<IVideoWindow> video_;
     ComPtr<IKsControl> extension_;
     ULONG node_ = 0;
+    void writePanTilt(long pan, long tilt);
 #else
     int fd_ = -1;
     unsigned char unit_ = 0;

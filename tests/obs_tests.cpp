@@ -338,6 +338,46 @@ static void rememberedCameraTests(const std::filesystem::path &directory) {
     }
     std::cout << "PASS: OBS remembered camera persistence, startup discovery and no fallback to other cameras\n";
 }
+static void ptzReleaseTests(const std::filesystem::path &directory) {
+    tinyobs::Host host{[] { return std::vector<tinyobs::Scene>{}; },
+                       [] { return tinyobs::Scene{}; }, [] { return std::string{}; }};
+    tinyobs::Dock dock(directory / L"dock.json", {}, host, false);
+    std::array<ptz::Range, 3> ranges{{{-130, 130, 1, 0, true}, {-90, 90, 1, 0, true}, {0, 100, 1, 0, true}}};
+    dock.presentPosition({21, -12, 0}, ranges);
+    auto slider = dock.findChild<QSlider *>("panSlider");
+    auto number = dock.findChild<QDoubleSpinBox *>("panNumber");
+    auto status = dock.findChild<QLabel *>("cameraStatus");
+    auto pump = [](int duration) {
+        QElapsedTimer timer; timer.start();
+        while (timer.elapsed() < duration) { QApplication::processEvents(); QThread::msleep(5); }
+    };
+    // No device is selected: an actual queued command produces a visible error.
+    // This lets the test observe unwanted writes without opening any hardware.
+    status->setText("Idle");
+    QMetaObject::invokeMethod(number, "editingFinished", Qt::DirectConnection);
+    slider->setSliderDown(true); slider->setSliderDown(false);
+    pump(300);
+    require(status->text() == "Idle", "unchanged focus/release must not queue PTZ commands");
+    slider->setSliderDown(true);
+    slider->setValue(slider->value() + 1);
+    pump(300);
+    require(status->text().startsWith("Error:"), "changed slider sends its live value");
+    status->setText("Live value sent");
+    slider->setSliderDown(false);
+    pump(300);
+    require(status->text() == "Live value sent", "release must not resend an already-sent PTZ value");
+    slider->setSliderDown(true);
+    slider->setValue(slider->value() + 1);
+    slider->setSliderDown(false);
+    pump(300);
+    require(status->text().startsWith("Error:"), "release flushes a quick unsent final movement");
+    status->setText("Idle");
+    number->setValue(number->value() + 1);
+    QMetaObject::invokeMethod(number, "editingFinished", Qt::DirectConnection);
+    pump(300);
+    require(status->text().startsWith("Error:"), "an edited numeric field still sends its value");
+    std::cout << "PASS: PTZ unchanged focus/release, live writes, no duplicate release and quick/numeric edits\n";
+}
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setStyle("Fusion");
@@ -345,6 +385,7 @@ int main(int argc, char **argv) {
         workerTests(); ruleTests();
         QTemporaryDir temp;
         require(temp.isValid(), "temporary config directory");
+        ptzReleaseTests(ptz::filePath(temp.path().toStdWString()) / L"ptz-release");
         rememberedCameraTests(ptz::filePath(temp.path().toStdWString()) / L"remembered-camera");
         transferTests(ptz::filePath(temp.path().toStdWString()) / L"transfer");
         configurationTests(ptz::filePath(temp.path().toStdWString()) / L"configuration");

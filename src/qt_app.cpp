@@ -13,7 +13,7 @@
 #endif
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
-    app.setApplicationName("TinyPTZ"); app.setApplicationDisplayName("Tiny PTZ"); app.setApplicationVersion("1.0.0");
+    app.setApplicationName("TinyPTZ"); app.setApplicationDisplayName("Tiny PTZ"); app.setApplicationVersion("1.0.1");
     app.setWindowIcon(QIcon(":/tinyptz/icon.png"));
     app.setDesktopFileName("tinyptz");
     app.setStyle("Fusion");

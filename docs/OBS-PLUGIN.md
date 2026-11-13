@@ -1,6 +1,6 @@
-# Tiny PTZ dock for OBS Studio - v1.0.0
+# Tiny PTZ dock for OBS Studio - v1.0.1
 
-This guide describes the existing Windows release. The native Linux v1.0.0 port
+This guide describes the existing Windows release. The native Linux v1.0.1 port
 has a separate [Linux installation/build guide](OBS-LINUX.md); Windows DLLs are
 not used on Linux.
 
@@ -21,7 +21,7 @@ from the plugin installation.
 
 No camera driver, OBSBOT Center SDK or companion process is installed.
 
-Open OBS and enable **Docks â†’ Tiny PTZ**. Drag its title bar to dock it beside
+Open OBS and enable **Docks → Tiny PTZ**. Drag its title bar to dock it beside
 your other OBS panels, or leave it floating. OBS remembers the dock layout.
 To uninstall, close OBS and remove the plugin DLL/data folders you installed.
 Your user presets/configuration can be kept for a later reinstall.

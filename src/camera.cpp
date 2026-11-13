@@ -246,6 +246,12 @@ std::string Camera::diagnostics() {
     }
     return out.str();
 }
+void Camera::writePanTilt(long pan, long tilt) {
+    // Protocol-3 aiSetGimbalMotorAngleR: roll unchanged, motor pitch, motor yaw.
+    // Use the native absolute target rather than the Windows UVC paired setter,
+    // which can restore cached coordinates on duplicate/small positive pan moves.
+    request(0x6444, true, motorAnglePayload(pan, tilt), false);
+}
 void Camera::setAxis(long property, long value) {
     auto r = range(property);
     if (!r.supported)
@@ -253,7 +259,21 @@ void Camera::setAxis(long property, long value) {
     if (value < r.min || value > r.max)
         throw std::runtime_error("Position is outside the camera's reported range.");
     wake(true);
-    check(control_->Set(property, quantize(value, r), CameraControl_Flags_Manual), "Move camera");
+    value = quantize(value, r);
+    if (property == CameraControl_Pan || property == CameraControl_Tilt) {
+        // Separate-axis UVC writes can drift the companion axis during small
+        // moves. Preserve its measured motor angle, not the driver's truncated
+        // negative-degree readback, and send both motor coordinates together.
+        auto position = read();
+        if (property == CameraControl_Pan) {
+            position.pan = value;
+        } else {
+            position.tilt = value;
+        }
+        writePanTilt(position.pan, position.tilt);
+    } else {
+        check(control_->Set(property, value, CameraControl_Flags_Manual), "Move camera");
+    }
 }
 void Camera::move(Position p) {
     auto a = range(CameraControl_Pan), b = range(CameraControl_Tilt), c = range(CameraControl_Zoom);
@@ -261,8 +281,7 @@ void Camera::move(Position p) {
         p.tilt < b.min || p.tilt > b.max || p.zoom < c.min || p.zoom > c.max)
         throw std::runtime_error("Preset is outside this camera's supported PTZ range.");
     wake(true);
-    setAxis(CameraControl_Pan, p.pan);
-    setAxis(CameraControl_Tilt, p.tilt);
+    writePanTilt(quantize(p.pan, a), quantize(p.tilt, b));
     setAxis(CameraControl_Zoom, p.zoom);
 }
 void Camera::preview(HWND owner, int width, int height) {

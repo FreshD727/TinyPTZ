@@ -86,14 +86,20 @@ Dock::Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
             stageAxis(axis, false);
         });
         QObject::connect(axes_[axis].slider, &QSlider::sliderReleased, this,
-                         [this, axis] { stageAxis(axis, true); flushLive(); });
+                         [this] { flushLive(true); });
         QObject::connect(axes_[axis].number, &QDoubleSpinBox::valueChanged, this,
                          [this, axis](double value) {
+            axes_[axis].numberEdited = true;
             QSignalBlocker block(axes_[axis].slider);
             axes_[axis].slider->setValue((int)std::lround((value - axes_[axis].low) / axes_[axis].step));
         });
         QObject::connect(axes_[axis].number, &QDoubleSpinBox::editingFinished, this,
-                         [this, axis] { if (!updating_) { stageAxis(axis, true); flushLive(); } });
+                         [this, axis] {
+            if (!updating_ && axes_[axis].numberEdited) {
+                axes_[axis].numberEdited = false;
+                stageAxis(axis, true); flushLive();
+            }
+        });
     }
     ptzLayout->addLayout(grid);
     if (standalone_) {
@@ -432,6 +438,7 @@ Dock::Numeric Dock::addNumeric(QGridLayout *layout, int row, const QString &name
 }
 void Dock::configure(Numeric &n, double low, double high, double step, double value, bool enabled) {
     QSignalBlocker a(n.slider), b(n.number);
+    n.numberEdited = false;
     double count = (high - low) / step;
     bool valid = std::isfinite(count) && step > 0 && count >= 0 && count < INT_MAX;
     n.low = low; n.step = valid ? step : 1;
@@ -681,6 +688,13 @@ void Dock::flushLive(bool force) {
         for (auto &axis : axes_) captured = captured || axis.slider->isSliderDown();
         bool final = force || e.final || (!captured && now - e.changed >= 150);
         if (!final && (!e.dirty || now - e.sent < 80)) { ++i; continue; }
+        // Releasing a PTZ slider finishes the edit; its latest value was already
+        // sent live. Resending an unchanged paired target can reset pan on the
+        // Windows driver. Image/settings edits still need their final verify.
+        if (final && !e.dirty && e.value.key.rfind("axis:", 0) == 0) {
+            i = edits_.erase(i);
+            continue;
+        }
         auto camera = device(); auto value = e.value; auto revision = deviceRevision_;
         worker_->submit("live:" + i->first, [this, camera, value, final, revision](ptz::Camera &c) {
             tinyobs::connect(c, camera);

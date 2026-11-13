@@ -91,6 +91,11 @@ by the OBS build script.
   the preview path without a physical camera.
 - Windows `-HardwareTest` is opt-in. It exercises the connected camera and restores
   its state afterward. Close competing camera applications before running it.
+- Windows `build\desktop\ptzctl.exe small-step-test` checks repeated one-step pan
+  and tilt changes for drift on the untouched axis and slow changes followed by
+  duplicate release targets, then restores the starting
+  position and power state. It physically moves the camera; disable tracking and
+  close competing camera applications before running it.
 
 A passing camera-free test does not establish compatibility with every firmware,
 USB driver, display server or OBS/Qt combination. Include actual tested versions

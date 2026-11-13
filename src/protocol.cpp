@@ -1,5 +1,7 @@
 #include "protocol.hpp"
 #include <cmath>
+#include <cstring>
+#include <limits>
 #include <stdexcept>
 namespace ptz {
 namespace {
@@ -51,6 +53,20 @@ long roundedAngle(double degrees) {
     if (!std::isfinite(degrees) || degrees < -180 || degrees > 180)
         throw std::runtime_error("Invalid gimbal angle");
     return std::lround(degrees);
+}
+std::vector<unsigned char> motorAnglePayload(double pan, double tilt) {
+    if (!std::isfinite(pan) || !std::isfinite(tilt) || pan < -180 || pan > 180 ||
+        tilt < -90 || tilt > 90)
+        throw std::runtime_error("Invalid native motor target");
+    static_assert(sizeof(float) == 4 && std::numeric_limits<float>::is_iec559);
+    std::vector<unsigned char> payload;
+    for (float value : {-1000.f, static_cast<float>(-tilt), static_cast<float>(pan)}) {
+        std::uint32_t bits;
+        std::memcpy(&bits, &value, sizeof(bits));
+        for (int byte = 0; byte < 4; ++byte)
+            payload.push_back(static_cast<unsigned char>(bits >> (8 * byte)));
+    }
+    return payload;
 }
 bool needsPowerCommand(bool awake, unsigned char reportedState, bool sessionAwake,
                        bool explicitRequest) {

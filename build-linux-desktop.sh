@@ -42,13 +42,13 @@ export EXTRA_QT_MODULES='waylandclient'
 python3 "$root/packaging/linux/collect-notices.py" "$appdir"
 bash "$root/packaging/linux/verify-appdir.sh" "$appdir"
 mkdir -p "$root/dist"
-export OUTPUT="$root/dist/TinyPTZ-v1.0.0-Linux-x86_64.AppImage" VERSION=1.0.0 ARCH=x86_64
+export OUTPUT="$root/dist/TinyPTZ-v1.0.1-Linux-x86_64.AppImage" VERSION=1.0.1 ARCH=x86_64
 "$tools/linuxdeploy-x86_64.AppImage" --appdir "$appdir" \
     --custom-apprun "$root/packaging/linux/AppRun" --output appimage
 chmod +x "$OUTPUT"
 QT_QPA_PLATFORM=offscreen "$OUTPUT" --appimage-extract-and-run --check-runtime --data-dir "$build/runtime-check-data"
 QT_QPA_PLATFORM=offscreen "$OUTPUT" --appimage-extract-and-run --check-preview-runtime --data-dir "$build/runtime-check-data"
-cp "$root/docs/DESKTOP-LINUX.md" "$root/dist/TinyPTZ-v1.0.0-Linux-README.md"
+cp "$root/docs/DESKTOP-LINUX.md" "$root/dist/TinyPTZ-v1.0.1-Linux-README.md"
 sha256sum "$OUTPUT"
 python3 "$root/scripts/package_release.py" desktop-linux --binary "$OUTPUT"
 python3 "$root/scripts/package_release.py" source

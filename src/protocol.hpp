@@ -11,6 +11,8 @@ struct MotorAngles {
 };
 MotorAngles decodeMotorAngles(const std::vector<unsigned char> &payload);
 long roundedAngle(double degrees);
+// Native absolute gimbal target: unchanged roll, inverted UI tilt, pan (float32 LE).
+std::vector<unsigned char> motorAnglePayload(double pan, double tilt);
 // Explicit power actions must not be skipped based on a cached/reported run state.
 bool needsPowerCommand(bool awake, unsigned char reportedState, bool sessionAwake,
                        bool explicitRequest);
