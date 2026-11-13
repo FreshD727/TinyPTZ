@@ -10,7 +10,8 @@
       in
       (
         {
-          packages.${system} = {
+          packages.${system} = rec {
+            default = tinyptz;
             tinyptz = pkgs.qt6Packages.callPackage ./package.nix { };
             obs-tinyptz = pkgs.qt6Packages.callPackage ./package.nix {
               buildDesktop = false;
