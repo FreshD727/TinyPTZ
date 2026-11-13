@@ -2,7 +2,7 @@
 
 A desktop controller and OBS Studio plugin for the **OBSBOT Tiny SE** camera,
 available for Windows and Linux. Control the camera, save unlimited positions
-and settings, and recall presets automatically when OBS scenes change.
+and settings, and recall presets automatically when OBS Studio scenes change.
 
 This is an independent project, not affiliated with or endorsed by OBSBOT.
 Only the Tiny SE has been tested; support for other OBSBOT models is not claimed.
@@ -21,6 +21,16 @@ Only the Tiny SE has been tested; support for other OBSBOT models is not claimed
 
 Available settings depend on firmware and the operating-system driver. See
 [settings coverage](docs/SETTINGS.md) for details and limitations.
+
+## Screenshots
+
+### Desktop app
+
+![Tiny PTZ desktop app showing PTZ controls and saved presets](assets/screenshots/desktop-app.png)
+
+### OBS Studio plugin
+
+![OBS Studio with the Tiny PTZ camera-control dock](assets/screenshots/OBS-studio-plugin-dock.png)
 
 ## Download and install
 
