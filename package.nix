@@ -8,6 +8,7 @@
   qtbase,
   qtmultimedia,
   obs-studio,
+  gst_all_1,
 
   buildDesktop ? true,
   buildObsPlugin ? false,
@@ -51,6 +52,17 @@ stdenv.mkDerivation rec {
       substituteInPlace $out/share/applications/tinyptz.desktop \
         --replace-fail "Exec=TinyPTZ" "Exec=$out/bin/TinyPTZ"
     '';
+
+  qtWrapperArgs = [
+    "--prefix"
+    "GST_PLUGIN_PATH"
+    ":"
+    "${lib.makeSearchPath "lib/gstreamer-1.0" [
+      gst_all_1.gst-plugins-base
+      gst_all_1.gst-plugins-good
+      gst_all_1.gst-plugins-bad
+    ]}"
+  ];
 
   meta = {
     description = "OBSBOT PTZ Camera control with OBS Plugin Integration";
