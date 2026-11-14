@@ -1,4 +1,4 @@
-# Tiny PTZ OBS plugin for Linux - v1.0.1
+# Tiny PTZ OBS plugin for Linux - v1.0.2
 
 Native Linux OBS dock for the OBSBOT Tiny SE: PTZ, tracking/image/device settings,
 unlimited presets, scene automation, full backups and scene-name restore matching.

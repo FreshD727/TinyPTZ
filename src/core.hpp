@@ -57,7 +57,6 @@ class Camera {
     ComPtr<IVideoWindow> video_;
     ComPtr<IKsControl> extension_;
     ULONG node_ = 0;
-    void writePanTilt(long pan, long tilt);
 #else
     int fd_ = -1;
     unsigned char unit_ = 0;
@@ -66,6 +65,7 @@ class Camera {
     bool awakeConfirmed_ = false;
     std::map<std::string, SettingValue> appliedSettings_;
     std::wstring id_;
+    void writePanTilt(long pan, long tilt);
     void discoverExtension();
     Range standardRange(bool image, int property, long &support) const;
     long standardRead(bool image, int property, long &flags) const;

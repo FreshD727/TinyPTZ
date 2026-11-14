@@ -1,5 +1,9 @@
 # Tiny PTZ desktop app for Windows
 
+The v1.0.2 Windows package reuses the tested v1.0.1 binaries unchanged. This
+release fixes Linux camera movement only; internal Windows version strings
+therefore still show 1.0.1.
+
 Extract the entire Windows x64 release ZIP to a writable folder and run
 `TinyPTZ.exe`. Keep the Qt/Visual C++ DLLs and `platforms` folder beside it.
 OBS Studio, OBSBOT Center and a separate Qt installation are not required.

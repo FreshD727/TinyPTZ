@@ -1,6 +1,10 @@
-# Tiny PTZ dock for OBS Studio - v1.0.1
+# Tiny PTZ dock for OBS Studio - v1.0.2
 
-This guide describes the existing Windows release. The native Linux v1.0.1 port
+The v1.0.2 Windows package reuses the tested v1.0.1 binaries unchanged. This
+release fixes Linux camera movement only; internal Windows version strings
+therefore still show 1.0.1.
+
+This guide describes the existing Windows release. The native Linux v1.0.2 port
 has a separate [Linux installation/build guide](OBS-LINUX.md); Windows DLLs are
 not used on Linux.
 

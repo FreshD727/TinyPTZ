@@ -133,6 +133,12 @@ The UI now uses the measured native angle rather than that truncated value.
 Zoom units and existing preset numbers are unchanged; no one-degree bias is
 added to movement commands.
 
+Linux pan/tilt movement uses native paired motor-angle targets as well. A
+single-axis edit reads the measured pose after waking and preserves the other
+axis; preset recall sends both gimbal coordinates together. This avoids stale
+parked coordinates in the driver's shared V4L2 pan/tilt control. Zoom continues
+to use its standard driver control.
+
 Recall waits for three matching measured position readings before applying
 saved tracking behavior. A position that does not settle produces an error.
 Tracking can still change framing after recall. Mechanical repeatability is

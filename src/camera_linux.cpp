@@ -142,17 +142,6 @@ void Camera::wake(bool awake,bool explicitRequest) {
     }
     throw std::runtime_error("Camera did not confirm the requested sleep/wake state.");
 }
-void Camera::setAxis(long property,long value) {
-    auto r=range(property);
-    if (!r.supported || value<r.min || value>r.max) throw std::runtime_error("Position outside the supported camera range.");
-    wake(true); standardWrite(false,property,quantize(value,r),false);
-}
-void Camera::move(Position p) {
-    for (auto pair : {std::pair<long,long>{CameraControl_Pan,p.pan},{CameraControl_Tilt,p.tilt},{CameraControl_Zoom,p.zoom}}) {
-        auto r=range(pair.first); if(!r.supported || pair.second<r.min || pair.second>r.max) throw std::runtime_error("Preset outside camera limits.");
-    }
-    setAxis(CameraControl_Pan,p.pan); setAxis(CameraControl_Tilt,p.tilt); setAxis(CameraControl_Zoom,p.zoom);
-}
 std::string Camera::diagnostics() { return "Linux V4L2/UVC: "+utf8(id_)+"; extension unit="+std::to_string(unit_); }
 std::filesystem::path portableData() { return std::filesystem::current_path()/"data"/"presets.ptz"; }
 void Camera::preview(HWND,int,int) { throw std::runtime_error("Use OBS Video Capture Device (V4L2) for video on Linux."); }
