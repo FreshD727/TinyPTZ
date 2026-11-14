@@ -68,6 +68,9 @@ if(BUILD_QT_DESKTOP)
   endif()
   target_link_libraries(TinyPTZ PRIVATE ptz_window)
   qt_target(TinyPTZ)
+  target_compile_definitions(TinyPTZ PRIVATE
+      DONT_CLOBBER_APPLICATIONS=$<BOOL:${DONT_CLOBBER_APPLICATIONS}>
+  )
   if(NOT WIN32)
    install(TARGETS TinyPTZ RUNTIME DESTINATION bin COMPONENT desktop)
    install(FILES packaging/linux/tinyptz.desktop DESTINATION share/applications COMPONENT desktop)

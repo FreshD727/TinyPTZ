@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
 #ifndef _WIN32
         const bool previewCheck = parser.isSet("check-preview-runtime");
         runtimeCheck = runtimeCheck || previewCheck;
-#if DONT_CLOBBER_APPLICATIONS
+#if !DONT_CLOBBER_APPLICATIONS
         if (!runtimeCheck) {
             auto error = tinyapp::installDesktopEntry();
             if (!error.isEmpty()) qWarning().noquote() << "Application-menu registration failed:" << error;

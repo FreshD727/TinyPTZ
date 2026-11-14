@@ -21,6 +21,7 @@ stdenv.mkDerivation rec {
   cmakeFlags = [
     (lib.cmakeBool "BUILD_OBS_PLUGIN" buildObsPlugin)
     (lib.cmakeBool "BUILD_QT_DESKTOP" buildDesktop)
+    (lib.cmakeBool "DONT_CLOBBER_APPLICATIONS" true)
   ];
 
   nativeBuildInputs = [
