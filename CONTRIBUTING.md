@@ -18,6 +18,23 @@ Run the enabled target's build/tests and the release archive tests when changing
 packaging. Hardware tests are opt-in; describe what you actually tested. A new
 model, backend or OBS runtime needs its own evidence of compatibility.
 
+## Formatting
+
+Install the Git hook in your Python 3.10+ environment after cloning:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pre_commit install --install-hooks
+```
+
+Commits format staged C/C++ files using `.clang-format`, format Python with Black,
+and check whitespace, line endings, YAML and JSON. If a formatter changes files,
+review and stage those changes, then commit again. Unstaged work is preserved.
+
+To format all tracked files manually, run `python -m pre_commit run --all-files`.
+Formatter versions are pinned in `.pre-commit-config.yaml`. Generated builds,
+releases and local investigation directories are excluded.
+
 Keep generated output and personal data out of commits. Application icons belong
 in `assets/`; runtime packaging code belongs in `packaging/` or `scripts/`.
 Public changes are made under the project's GPL version 2-or-later license.

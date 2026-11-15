@@ -1,6 +1,6 @@
 #pragma once
-#include <array>
 #include "platform.hpp"
+#include <array>
 #include <filesystem>
 #include <map>
 #include <stdexcept>
@@ -18,18 +18,22 @@ using Microsoft::WRL::ComPtr;
 struct Device {
     std::wstring name, id;
 };
+
 struct Position {
     long pan = 0, tilt = 0, zoom = 0;
 };
+
 struct Range {
     long min = 0, max = 0, step = 1, normal = 0;
     bool supported = false;
 };
+
 struct SettingValue {
     std::string key;
     double value = 0;
     bool automatic = false;
 };
+
 struct Setting {
     SettingValue current, defaultValue;
     bool defaultAvailable = false;
@@ -38,15 +42,18 @@ struct Setting {
     bool readable = false, writable = false, autoSupported = false;
     std::vector<std::pair<double, std::wstring>> choices;
 };
+
 struct Preset {
     std::wstring name, device;
     Position position;
     std::vector<SettingValue> settings;
 };
+
 std::vector<Device> devices();
 std::string utf8(const std::wstring &);
 std::wstring wide(const std::string &);
 std::filesystem::path portableData();
+
 class Camera {
 #ifdef _WIN32
     ComPtr<IBaseFilter> filter_;
@@ -83,6 +90,7 @@ class Camera {
     Camera &operator=(const Camera &) = delete;
     void connect(const std::wstring &id);
     void disconnect();
+
     bool connected() const {
 #ifdef _WIN32
         return control_ != nullptr;
@@ -90,9 +98,11 @@ class Camera {
         return fd_ >= 0;
 #endif
     }
+
     const std::wstring &id() const {
         return id_;
     }
+
     Range range(long property) const;
     Position read();
     void waitForPosition(Position target);
@@ -116,6 +126,7 @@ class Camera {
     std::string bootDiagnostics();
     void preview(HWND owner, int width, int height);
     void resizePreview(int width, int height);
+
     bool previewRunning() const {
 #ifdef _WIN32
         OAFilterState state = State_Stopped;
@@ -124,7 +135,9 @@ class Camera {
         return false;
 #endif
     }
+
     void stopPreview();
+
     ~Camera() {
         try {
             disconnect();
@@ -132,17 +145,22 @@ class Camera {
         }
     }
 };
+
 class PresetStore {
     std::filesystem::path path_;
 
   public:
     std::vector<Preset> items;
+
     explicit PresetStore(std::filesystem::path path) : path_(std::move(path)) {}
+
     void load();
     void save() const;
+
     const std::filesystem::path &path() const {
         return path_;
     }
 };
+
 long quantize(long value, Range r);
 } // namespace ptz

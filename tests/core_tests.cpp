@@ -3,20 +3,28 @@
 #include <fstream>
 #include <iostream>
 using namespace ptz;
+
 void require(bool condition, const char *message) {
     if (!condition)
         throw std::runtime_error(message);
 }
+
 int main() {
     try {
-        require(motorAnglePayload(17, -4) == std::vector<unsigned char>{
-                    0, 0, 0x7a, 0xc4, 0, 0, 0x80, 0x40, 0, 0, 0x88, 0x41},
+        require(motorAnglePayload(17, -4) == std::vector<unsigned char>{0, 0, 0x7a, 0xc4, 0, 0,
+                                                                        0x80, 0x40, 0, 0, 0x88,
+                                                                        0x41},
                 "native target float layout, unchanged roll and inverted negative tilt");
-        require(motorAnglePayload(-17, 4) == std::vector<unsigned char>{
-                    0, 0, 0x7a, 0xc4, 0, 0, 0x80, 0xc0, 0, 0, 0x88, 0xc1},
+        require(motorAnglePayload(-17, 4) == std::vector<unsigned char>{0, 0, 0x7a, 0xc4, 0, 0,
+                                                                        0x80, 0xc0, 0, 0, 0x88,
+                                                                        0xc1},
                 "native target negative pan and positive tilt");
         bool invalidMotorTarget = false;
-        try { motorAnglePayload(0, 91); } catch (const std::runtime_error &) { invalidMotorTarget = true; }
+        try {
+            motorAnglePayload(0, 91);
+        } catch (const std::runtime_error &) {
+            invalidMotorTarget = true;
+        }
         require(invalidMotorTarget, "reject invalid motor target before sending");
         // Actual Tiny SE telemetry: Euler angles differ from motor coordinates.
         std::vector<unsigned char> pose{43,  0,   209, 0, 124, 0,   0,   0,   40, 0, 169, 0,

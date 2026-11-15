@@ -1,6 +1,6 @@
 #pragma once
-#include <QObject>
 #include <QImage>
+#include <QObject>
 #include <QString>
 #include <functional>
 #include <memory>
@@ -17,6 +17,7 @@ class LinuxPreviewCapture : public QObject {
     bool running() const;
     std::function<void(const QImage &)> frame;
     std::function<void(const QString &)> failed;
+
   private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

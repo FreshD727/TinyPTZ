@@ -3,6 +3,7 @@
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+
 namespace ptz {
 namespace {
 std::uint16_t crc(const unsigned char *data, size_t length) {
@@ -14,11 +15,13 @@ std::uint16_t crc(const unsigned char *data, size_t length) {
     }
     return value ^ 0xffff;
 }
+
 void word(std::array<unsigned char, 60> &b, size_t offset, std::uint16_t value) {
     b[offset] = (unsigned char)value;
     b[offset + 1] = (unsigned char)(value >> 8);
 }
 } // namespace
+
 std::array<unsigned char, 60> wakePacket(bool awake, std::uint16_t sequence) {
     std::array<unsigned char, 60> frame{};
     frame[0] = 0xaa;
@@ -37,6 +40,7 @@ std::array<unsigned char, 60> wakePacket(bool awake, std::uint16_t sequence) {
     frame[32] = 1;
     return frame;
 }
+
 MotorAngles decodeMotorAngles(const std::vector<unsigned char> &payload) {
     if (payload.size() != 18 && payload.size() != 24)
         throw std::runtime_error("Unsupported native gimbal telemetry layout");
@@ -49,14 +53,16 @@ MotorAngles decodeMotorAngles(const std::vector<unsigned char> &payload) {
         throw std::runtime_error("Native motor angles are outside camera limits");
     return result;
 }
+
 long roundedAngle(double degrees) {
     if (!std::isfinite(degrees) || degrees < -180 || degrees > 180)
         throw std::runtime_error("Invalid gimbal angle");
     return std::lround(degrees);
 }
+
 std::vector<unsigned char> motorAnglePayload(double pan, double tilt) {
-    if (!std::isfinite(pan) || !std::isfinite(tilt) || pan < -180 || pan > 180 ||
-        tilt < -90 || tilt > 90)
+    if (!std::isfinite(pan) || !std::isfinite(tilt) || pan < -180 || pan > 180 || tilt < -90 ||
+        tilt > 90)
         throw std::runtime_error("Invalid native motor target");
     static_assert(sizeof(float) == 4 && std::numeric_limits<float>::is_iec559);
     std::vector<unsigned char> payload;
@@ -68,6 +74,7 @@ std::vector<unsigned char> motorAnglePayload(double pan, double tilt) {
     }
     return payload;
 }
+
 bool needsPowerCommand(bool awake, unsigned char reportedState, bool sessionAwake,
                        bool explicitRequest) {
     return explicitRequest || reportedState != (awake ? 1 : 3) || (awake && !sessionAwake);

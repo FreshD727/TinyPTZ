@@ -5,13 +5,16 @@
 #include <iostream>
 #include <thread>
 using namespace ptz;
+
 namespace {
 void settle() {
     std::this_thread::sleep_for(std::chrono::milliseconds(1600));
 }
+
 void print(Position p) {
     std::wcout << p.pan << L" " << p.tilt << L" " << p.zoom << L"\n";
 }
+
 void expect(Camera &c, Position target, const char *label) {
     settle();
     auto actual = c.read();
@@ -21,6 +24,7 @@ void expect(Camera &c, Position target, const char *label) {
         throw std::runtime_error(std::string(label) +
                                  ": camera did not reach the requested position");
 }
+
 void hardwareTest(Camera &c) {
     bool wasSleeping = c.sleeping();
     c.wake(true);
@@ -76,6 +80,7 @@ void hardwareTest(Camera &c) {
         throw;
     }
 }
+
 void smallStepTest(Camera &c) {
     bool wasSleeping = c.sleeping();
     c.wake(true);
@@ -135,6 +140,7 @@ void smallStepTest(Camera &c) {
         throw;
     }
 }
+
 void liveSettingsTest(Camera &c) {
     bool asleep = c.sleeping();
     c.wake(true);
@@ -179,6 +185,7 @@ void liveSettingsTest(Camera &c) {
         throw;
     }
 }
+
 void positionTest(Camera &c) {
     bool asleep = c.sleeping();
     c.wake(true);
@@ -231,6 +238,7 @@ void positionTest(Camera &c) {
         throw;
     }
 }
+
 void imageControlsTest(Camera &c) {
     bool asleep = c.sleeping();
     c.wake(true);
@@ -263,6 +271,7 @@ void imageControlsTest(Camera &c) {
         throw;
     }
 }
+
 void bootTest(Camera &c) {
     bool asleep = c.sleeping();
     c.wake(true);
@@ -307,6 +316,7 @@ void bootTest(Camera &c) {
         throw;
     }
 }
+
 void settingsTest(Camera &c) {
     bool asleep = c.sleeping();
     c.wake(true);
@@ -423,6 +433,7 @@ void settingsTest(Camera &c) {
     }
 }
 } // namespace
+
 int wmain(int argc, wchar_t **argv) {
     std::cout << std::unitbuf;
     HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);

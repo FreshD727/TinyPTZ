@@ -1,11 +1,11 @@
 #pragma once
 #include "core.hpp"
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <functional>
 #include <mutex>
 #include <thread>
-#include <atomic>
 
 namespace tinyobs {
 // Camera resources are created, used and destroyed on this worker.
@@ -22,8 +22,13 @@ class CameraWorker {
     void stop();
     CameraWorker(const CameraWorker &) = delete;
     CameraWorker &operator=(const CameraWorker &) = delete;
+
   private:
-    struct Job { std::string key; Work work; };
+    struct Job {
+        std::string key;
+        Work work;
+    };
+
     std::mutex mutex_;
     std::condition_variable condition_;
     std::deque<Job> jobs_;
@@ -31,8 +36,11 @@ class CameraWorker {
     std::thread thread_;
     std::atomic<bool> finished_{false};
 };
+
 inline void connect(ptz::Camera &camera, const std::wstring &device) {
-    if (device.empty()) throw std::runtime_error("Select a camera first.");
-    if (!camera.connected() || camera.id() != device) camera.connect(device);
+    if (device.empty())
+        throw std::runtime_error("Select a camera first.");
+    if (!camera.connected() || camera.id() != device)
+        camera.connect(device);
 }
 } // namespace tinyobs

@@ -1,10 +1,12 @@
 // Exercise native controls under a hidden parent; no desktop automation/camera.
 #include "../src/settings_ui.cpp"
 #include <iostream>
+
 void require(bool value, const char *message) {
     if (!value)
         throw std::runtime_error(message);
 }
+
 int main() {
     using namespace ptz;
     try {

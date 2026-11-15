@@ -7,9 +7,9 @@
 #include <set>
 #include <sstream>
 #ifndef _WIN32
+#include <cstdio>
 #include <fcntl.h>
 #include <unistd.h>
-#include <cstdio>
 #endif
 namespace ptz {
 long quantize(long v, Range r) {
@@ -19,6 +19,7 @@ long quantize(long v, Range r) {
     long long steps = (clamped - r.min + r.step / 2) / r.step;
     return (long)std::min<long long>(r.max, (long long)r.min + steps * r.step);
 }
+
 // UTF-8 names and device IDs, quoted to preserve whitespace. No firmware slot limit.
 void PresetStore::load() {
     std::vector<Preset> loaded;
@@ -80,6 +81,7 @@ void PresetStore::load() {
         throw std::runtime_error("Could not finish reading preset file");
     items = std::move(loaded);
 }
+
 void PresetStore::save() const {
     if (!path_.parent_path().empty())
         std::filesystem::create_directories(path_.parent_path());
@@ -132,13 +134,18 @@ void PresetStore::save() const {
         throw std::runtime_error("Could not replace preset file; original file preserved");
 #else
     int file = ::open(temp.c_str(), O_RDONLY | O_CLOEXEC);
-    if (file < 0) throw std::runtime_error("Cannot synchronize preset file; original preserved");
-    int synced = ::fsync(file); ::close(file);
+    if (file < 0)
+        throw std::runtime_error("Cannot synchronize preset file; original preserved");
+    int synced = ::fsync(file);
+    ::close(file);
     if (synced != 0 || ::rename(temp.c_str(), path_.c_str()) != 0)
         throw std::runtime_error("Could not replace preset file; original file preserved");
     auto parent = path_.parent_path().empty() ? std::filesystem::path(".") : path_.parent_path();
     int directory = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (directory >= 0) { ::fsync(directory); ::close(directory); }
+    if (directory >= 0) {
+        ::fsync(directory);
+        ::close(directory);
+    }
 #endif
 }
 } // namespace ptz

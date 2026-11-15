@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <windows.h>
+
 namespace ptz {
 // Trackbar positions are step indices, so negative/fractional ranges work too.
 struct NumericSlider {
@@ -14,6 +15,7 @@ struct NumericSlider {
     double minimum = 0, step = 1;
     int ticks = 0;
     bool valid = false, updating = false;
+
     void configure(double low, double high, double increment, double value, bool enabled) {
         minimum = low;
         step = increment;
@@ -30,12 +32,14 @@ struct NumericSlider {
         EnableWindow(track, valid && ticks > 0 && enabled);
         reflect(value);
     }
+
     void reflect(double value) {
         if (!valid || !std::isfinite(value))
             return;
         double index = std::clamp((value - minimum) / step, 0.0, (double)ticks);
         SendMessageW(track, TBM_SETPOS, TRUE, (LPARAM)std::lround(index));
     }
+
     void fromEdit() {
         if (updating || !valid)
             return;
@@ -49,6 +53,7 @@ struct NumericSlider {
         } catch (...) { /* Preserve partial text such as '-' while typing. */
         }
     }
+
     void fromTrack() {
         if (!valid || !IsWindowEnabled(track))
             return;

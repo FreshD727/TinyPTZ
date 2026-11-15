@@ -1,13 +1,13 @@
 #pragma once
 #include "camera_worker.hpp"
-#include "scene_rules.hpp"
 #include "scene_matching.hpp"
-#include <QWidget>
-#include <QTimer>
+#include "scene_rules.hpp"
 #include <QJsonObject>
+#include <QTimer>
+#include <QWidget>
 #include <atomic>
-#include <memory>
 #include <map>
+#include <memory>
 class QComboBox;
 class QDoubleSpinBox;
 class QSlider;
@@ -19,17 +19,23 @@ class QTreeWidgetItem;
 class QPushButton;
 class QGridLayout;
 class QLineEdit;
+
 namespace tinyobs {
-struct Scene { std::string uuid; QString name; };
+struct Scene {
+    std::string uuid;
+    QString name;
+};
+
 struct Host {
     std::function<std::vector<Scene>()> scenes;
     std::function<Scene()> currentScene;
     std::function<std::string()> collection;
 };
+
 class Dock : public QWidget {
   public:
-    Dock(std::filesystem::path config, std::filesystem::path bundledPresets,
-         Host host, bool discover = true, bool standalone = false);
+    Dock(std::filesystem::path config, std::filesystem::path bundledPresets, Host host,
+         bool discover = true, bool standalone = false);
     ~Dock() override;
     void frontendReady();
     void sceneChanged();
@@ -42,11 +48,22 @@ class Dock : public QWidget {
     void setPreviewEnabled(bool enabled, HWND owner, int width, int height);
     void resizePreview(int width, int height);
     void setThemePreference(const QString &theme);
-    QString themePreference() const { return theme_; }
-    std::wstring selectedDevice() const { return device(); }
-    void setPreviewStatus(const QString &message, bool error = false) { status(message, error); }
+
+    QString themePreference() const {
+        return theme_;
+    }
+
+    std::wstring selectedDevice() const {
+        return device();
+    }
+
+    void setPreviewStatus(const QString &message, bool error = false) {
+        status(message, error);
+    }
+
     std::function<void(bool, const QString &)> connectionChanged;
     std::function<void(bool, const QString &)> previewChanged;
+
   private:
     struct Numeric {
         QSlider *slider = nullptr;
@@ -55,7 +72,14 @@ class Dock : public QWidget {
         int ticks = 0;
         bool numberEdited = false;
     };
-    struct Edit { ptz::SettingValue value; bool final = false; qint64 changed = 0, sent = -1000; bool dirty = true; };
+
+    struct Edit {
+        ptz::SettingValue value;
+        bool final = false;
+        qint64 changed = 0, sent = -1000;
+        bool dirty = true;
+    };
+
     Host host_;
     std::filesystem::path config_;
     std::unique_ptr<ptz::PresetStore> store_;
@@ -92,8 +116,8 @@ class Dock : public QWidget {
     void pollPosition();
     void filterPresets();
     void readSettings();
-    Numeric addNumeric(QGridLayout *layout, int row, const QString &name,
-                       const QString &objectName, QWidget *parent);
+    Numeric addNumeric(QGridLayout *layout, int row, const QString &name, const QString &objectName,
+                       QWidget *parent);
     void configure(Numeric &numeric, double low, double high, double step, double value,
                    bool enabled);
     void selectSetting();

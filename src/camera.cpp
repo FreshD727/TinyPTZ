@@ -7,6 +7,7 @@
 #include <sstream>
 #include <thread>
 #include <vidcap.h>
+
 namespace ptz {
 static void check(HRESULT hr, const char *what) {
     if (FAILED(hr)) {
@@ -17,6 +18,7 @@ static void check(HRESULT hr, const char *what) {
         throw std::runtime_error(s.str());
     }
 }
+
 std::string utf8(const std::wstring &s) {
     if (s.empty())
         return {};
@@ -28,6 +30,7 @@ std::string utf8(const std::wstring &s) {
     WideCharToMultiByte(CP_UTF8, 0, s.data(), (int)s.size(), r.data(), n, nullptr, nullptr);
     return r;
 }
+
 std::wstring wide(const std::string &s) {
     if (s.empty())
         return {};
@@ -38,6 +41,7 @@ std::wstring wide(const std::string &s) {
     MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), r.data(), n);
     return r;
 }
+
 static ComPtr<IEnumMoniker> enumerate() {
     ComPtr<ICreateDevEnum> d;
     check(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&d)),
@@ -47,6 +51,7 @@ static ComPtr<IEnumMoniker> enumerate() {
     check(hr, "Enumerate cameras");
     return e;
 }
+
 static std::wstring identity(IMoniker *m) {
     LPOLESTR p = nullptr;
     check(m->GetDisplayName(nullptr, nullptr, &p), "Read camera identity");
@@ -54,6 +59,7 @@ static std::wstring identity(IMoniker *m) {
     CoTaskMemFree(p);
     return id;
 }
+
 std::vector<Device> devices() {
     std::vector<Device> out;
     auto e = enumerate();
@@ -75,6 +81,7 @@ std::vector<Device> devices() {
     }
     return out;
 }
+
 void Camera::connect(const std::wstring &id) {
     disconnect();
     auto e = enumerate();
@@ -95,6 +102,7 @@ void Camera::connect(const std::wstring &id) {
     }
     throw std::runtime_error("Selected camera was disconnected. Refresh the device list.");
 }
+
 void Camera::disconnect() {
     stopPreview();
     awakeConfirmed_ = false;
@@ -105,6 +113,7 @@ void Camera::disconnect() {
     filter_.Reset();
     id_.clear();
 }
+
 Range Camera::range(long property) const {
     Range r;
     long flags = 0;
@@ -116,6 +125,7 @@ Range Camera::range(long property) const {
     }
     return r;
 }
+
 Position Camera::read() {
     if (!control_)
         throw std::runtime_error("Connect a camera first.");
@@ -133,6 +143,7 @@ Position Camera::read() {
     check(control_->Get(CameraControl_Zoom, &p.zoom, &flags), "Read zoom");
     return p;
 }
+
 void Camera::waitForPosition(Position target) {
     int stable = 0;
     for (int attempt = 0; attempt < 60; ++attempt) {
@@ -150,8 +161,10 @@ void Camera::waitForPosition(Position target) {
                              std::to_string(actual.pan) + "/" + std::to_string(actual.tilt) + "/" +
                              std::to_string(actual.zoom));
 }
+
 static const GUID obsbotXu = {
     0x9a1e7291, 0x6843, 0x4683, {0x6d, 0x92, 0x39, 0xbc, 0x79, 0x06, 0xee, 0x49}};
+
 void Camera::discoverExtension() {
     if (extension_)
         return;
@@ -183,6 +196,7 @@ void Camera::discoverExtension() {
     }
     throw std::runtime_error("OBSBOT extension unit is unavailable on this camera.");
 }
+
 bool Camera::sleeping() {
     discoverExtension();
     KSP_NODE prop{};
@@ -198,6 +212,7 @@ bool Camera::sleeping() {
         throw std::runtime_error("Incomplete OBSBOT status");
     return status[9] != 1;
 }
+
 void Camera::wake(bool awake, bool explicitRequest) {
     // Never change the Meet-only no-stream-sleep policy on a Tiny SE.
     auto before = extension(6, false);
@@ -225,6 +240,7 @@ void Camera::wake(bool awake, bool explicitRequest) {
     if (awake)
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 }
+
 std::string Camera::diagnostics() {
     discoverExtension();
     std::ostringstream out;
@@ -246,12 +262,14 @@ std::string Camera::diagnostics() {
     }
     return out.str();
 }
+
 void Camera::writePanTilt(long pan, long tilt) {
     // Protocol-3 aiSetGimbalMotorAngleR: roll unchanged, motor pitch, motor yaw.
     // Use the native absolute target rather than the Windows UVC paired setter,
     // which can restore cached coordinates on duplicate/small positive pan moves.
     request(0x6444, true, motorAnglePayload(pan, tilt), false);
 }
+
 void Camera::setAxis(long property, long value) {
     auto r = range(property);
     if (!r.supported)
@@ -275,6 +293,7 @@ void Camera::setAxis(long property, long value) {
         check(control_->Set(property, value, CameraControl_Flags_Manual), "Move camera");
     }
 }
+
 void Camera::move(Position p) {
     auto a = range(CameraControl_Pan), b = range(CameraControl_Tilt), c = range(CameraControl_Zoom);
     if (!a.supported || !b.supported || !c.supported || p.pan < a.min || p.pan > a.max ||
@@ -284,6 +303,7 @@ void Camera::move(Position p) {
     writePanTilt(quantize(p.pan, a), quantize(p.tilt, b));
     setAxis(CameraControl_Zoom, p.zoom);
 }
+
 void Camera::preview(HWND owner, int width, int height) {
     stopPreview();
     try {
@@ -314,10 +334,12 @@ void Camera::preview(HWND owner, int width, int height) {
         throw;
     }
 }
+
 void Camera::resizePreview(int w, int h) {
     if (video_)
         video_->SetWindowPosition(0, 0, w, h);
 }
+
 void Camera::stopPreview() {
     if (media_)
         media_->Stop();
@@ -329,6 +351,7 @@ void Camera::stopPreview() {
     media_.Reset();
     graph_.Reset();
 }
+
 std::filesystem::path portableData() {
     std::wstring p(32768, 0);
     DWORD n = GetModuleFileNameW(nullptr, p.data(), (DWORD)p.size());
@@ -337,48 +360,59 @@ std::filesystem::path portableData() {
     p.resize(n);
     return std::filesystem::path(p).parent_path() / L"data" / L"presets.ptz";
 }
+
 Range Camera::standardRange(bool image, int property, long &support) const {
     Range r;
-    HRESULT hr = image ? (procamp_ ? procamp_->GetRange(property, &r.min, &r.max, &r.step, &r.normal, &support) : E_NOINTERFACE)
-                       : (control_ ? control_->GetRange(property, &r.min, &r.max, &r.step, &r.normal, &support) : E_NOINTERFACE);
-    check(hr, "Read camera setting range"); r.supported = true; return r;
+    HRESULT hr =
+        image
+            ? (procamp_ ? procamp_->GetRange(property, &r.min, &r.max, &r.step, &r.normal, &support)
+                        : E_NOINTERFACE)
+            : (control_ ? control_->GetRange(property, &r.min, &r.max, &r.step, &r.normal, &support)
+                        : E_NOINTERFACE);
+    check(hr, "Read camera setting range");
+    r.supported = true;
+    return r;
 }
+
 long Camera::standardRead(bool image, int property, long &flags) const {
     long value = 0;
     check(image ? (procamp_ ? procamp_->Get(property, &value, &flags) : E_NOINTERFACE)
-                : (control_ ? control_->Get(property, &value, &flags) : E_NOINTERFACE), "Read camera setting");
+                : (control_ ? control_->Get(property, &value, &flags) : E_NOINTERFACE),
+          "Read camera setting");
     return value;
 }
+
 void Camera::standardWrite(bool image, int property, long value, bool automatic) {
     check(image ? (procamp_ ? procamp_->Set(property, value, automatic ? 1 : 2) : E_NOINTERFACE)
-                : (control_ ? control_->Set(property, value, automatic ? 1 : 2) : E_NOINTERFACE), "Write camera setting");
+                : (control_ ? control_->Set(property, value, automatic ? 1 : 2) : E_NOINTERFACE),
+          "Write camera setting");
 }
+
 void Camera::setAntiFlicker(long value) {
-                ComPtr<IKsTopologyInfo> topology;
-                HRESULT hr = filter_.As(&topology);
-                DWORD count = 0;
-                bool done = false;
-                if (SUCCEEDED(hr))
-                    topology->get_NumNodes(&count);
-                for (DWORD node = 0; node < count; ++node) {
-                    ComPtr<IVideoProcAmp> proc;
-                    if (FAILED(topology->CreateNodeInstance(node, __uuidof(IVideoProcAmp),
-                                                            (void **)proc.GetAddressOf())))
-                        continue;
-                    long lo = 0, hi = 0, step = 0, normal = 0, caps = 0;
-                    if (FAILED(proc->getRange_PowerlineFrequency(&lo, &hi, &step, &normal, &caps)))
-                        continue;
-                    hr = proc->put_PowerlineFrequency(value, 2);
-                    if (SUCCEEDED(hr)) {
-                        done = true;
-                        break;
-                    }
-                }
-                if (!done) {
-                    std::ostringstream error;
-                    error << "Camera rejected anti-flicker setting (0x" << std::hex
-                          << (unsigned long)hr << ")";
-                    throw std::runtime_error(error.str());
-                }
+    ComPtr<IKsTopologyInfo> topology;
+    HRESULT hr = filter_.As(&topology);
+    DWORD count = 0;
+    bool done = false;
+    if (SUCCEEDED(hr))
+        topology->get_NumNodes(&count);
+    for (DWORD node = 0; node < count; ++node) {
+        ComPtr<IVideoProcAmp> proc;
+        if (FAILED(topology->CreateNodeInstance(node, __uuidof(IVideoProcAmp),
+                                                (void **)proc.GetAddressOf())))
+            continue;
+        long lo = 0, hi = 0, step = 0, normal = 0, caps = 0;
+        if (FAILED(proc->getRange_PowerlineFrequency(&lo, &hi, &step, &normal, &caps)))
+            continue;
+        hr = proc->put_PowerlineFrequency(value, 2);
+        if (SUCCEEDED(hr)) {
+            done = true;
+            break;
+        }
+    }
+    if (!done) {
+        std::ostringstream error;
+        error << "Camera rejected anti-flicker setting (0x" << std::hex << (unsigned long)hr << ")";
+        throw std::runtime_error(error.str());
+    }
 }
 } // namespace ptz

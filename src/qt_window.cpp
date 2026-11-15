@@ -5,21 +5,22 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPainter>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QSplitter>
 #include <QStyleHints>
 #include <QVBoxLayout>
-#include <QPainter>
 #ifdef _WIN32
 #include <dwmapi.h>
 #else
-#include <QVideoSink>
-#include <QVideoFrame>
-#include <QDebug>
 #include "linux_preview.hpp"
+#include <QDebug>
+#include <QVideoFrame>
+#include <QVideoSink>
 #endif
 #include <algorithm>
+
 namespace tinyapp {
 #ifndef _WIN32
 // A plain sink requests CPU frames instead of importing camera textures into
@@ -28,32 +29,52 @@ class SoftwareVideoSurface : public QWidget {
   public:
     explicit SoftwareVideoSurface(QWidget *parent) : QWidget(parent), sink_(this) {
         setAttribute(Qt::WA_OpaquePaintEvent);
-        QObject::connect(&sink_, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
-            if (!frame.isValid()) { image_ = {}; update(); return; }
-            auto image = frame.toImage();
-            if (image.isNull()) {
-                if (failed) failed(QString("Cannot decode preview frame (pixel format %1).").arg(int(frame.pixelFormat())));
-                return;
-            }
-            image_ = std::move(image); update();
-            if (ready) ready();
-        });
+        QObject::connect(
+            &sink_, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
+                if (!frame.isValid()) {
+                    image_ = {};
+                    update();
+                    return;
+                }
+                auto image = frame.toImage();
+                if (image.isNull()) {
+                    if (failed)
+                        failed(QString("Cannot decode preview frame (pixel format %1).")
+                                   .arg(int(frame.pixelFormat())));
+                    return;
+                }
+                image_ = std::move(image);
+                update();
+                if (ready)
+                    ready();
+            });
     }
-    QVideoSink *sink() { return &sink_; }
+
+    QVideoSink *sink() {
+        return &sink_;
+    }
+
     void presentImage(const QImage &image) {
-        image_ = image; update();
-        if (!image.isNull() && ready) ready();
+        image_ = image;
+        update();
+        if (!image.isNull() && ready)
+            ready();
     }
+
     std::function<void()> ready;
     std::function<void(const QString &)> failed;
+
   protected:
     void paintEvent(QPaintEvent *) override {
-        QPainter painter(this); painter.fillRect(rect(), QColor("#070c14"));
-        if (image_.isNull()) return;
+        QPainter painter(this);
+        painter.fillRect(rect(), QColor("#070c14"));
+        if (image_.isNull())
+            return;
         QSize fit = image_.size().scaled(size(), Qt::KeepAspectRatio);
         QRect target(QPoint((width() - fit.width()) / 2, (height() - fit.height()) / 2), fit);
         painter.drawImage(target, image_);
     }
+
   private:
     QVideoSink sink_;
     QImage image_;
@@ -67,6 +88,7 @@ static bool systemDark() {
     return dark;
 #endif
 }
+
 void applyTheme(const QString &theme) {
     const bool nativeDark = systemDark();
     bool dark = theme == "dark" || (theme == "system" && nativeDark);
@@ -98,7 +120,8 @@ void applyTheme(const QString &theme) {
     p.setColor(QPalette::Midlight, QColor(secondary));
     p.setColor(QPalette::Shadow, QColor(background));
     qApp->setPalette(p);
-    qApp->setStyleSheet(QString(R"(
+    qApp->setStyleSheet(
+        QString(R"(
         QFrame[card="true"] { background: %1; border: 1px solid %2; border-radius: 12px; }
         QLabel { background: transparent; }
         QLabel[muted="true"] { color: %3; }
@@ -128,8 +151,10 @@ void applyTheme(const QString &theme) {
         QCheckBox { spacing: 7px; padding: 3px 0; }
         QSplitter::handle { background: transparent; }
         QToolTip { border: 1px solid %2; padding: 5px; }
-    )").arg(panel, border, muted, secondary, accent, dark ? "#101720" : "#ffffff"));
+    )")
+            .arg(panel, border, muted, secondary, accent, dark ? "#101720" : "#ffffff"));
 }
+
 PreviewCanvas::PreviewCanvas(QWidget *parent) : QWidget(parent) {
     setObjectName("previewCanvas");
     setMinimumSize(280, 180);
@@ -137,8 +162,14 @@ PreviewCanvas::PreviewCanvas(QWidget *parent) : QWidget(parent) {
     surface_ = new QWidget(this);
 #else
     auto software = new SoftwareVideoSurface(this);
-    software->ready = [this] { if (frameReady) frameReady(); };
-    software->failed = [this](const QString &message) { if (frameError) frameError(message); };
+    software->ready = [this] {
+        if (frameReady)
+            frameReady();
+    };
+    software->failed = [this](const QString &message) {
+        if (frameError)
+            frameError(message);
+    };
     surface_ = software;
 #endif
     surface_->setObjectName("videoSurface");
@@ -153,6 +184,7 @@ PreviewCanvas::PreviewCanvas(QWidget *parent) : QWidget(parent) {
     placeholder_->setStyleSheet("color: #aabbd0; background: transparent; padding: 20px;");
     setPlaying(false);
 }
+
 HWND PreviewCanvas::owner() const {
 #ifdef _WIN32
     return reinterpret_cast<HWND>(surface_->winId());
@@ -160,120 +192,207 @@ HWND PreviewCanvas::owner() const {
     return nullptr;
 #endif
 }
-QSize PreviewCanvas::videoSize() const { return surface_->size(); }
+
+QSize PreviewCanvas::videoSize() const {
+    return surface_->size();
+}
 #ifndef _WIN32
-QVideoSink *PreviewCanvas::videoSink() const { return static_cast<SoftwareVideoSurface *>(surface_)->sink(); }
-void PreviewCanvas::presentImage(const QImage &image) { static_cast<SoftwareVideoSurface *>(surface_)->presentImage(image); }
+QVideoSink *PreviewCanvas::videoSink() const {
+    return static_cast<SoftwareVideoSurface *>(surface_)->sink();
+}
+
+void PreviewCanvas::presentImage(const QImage &image) {
+    static_cast<SoftwareVideoSurface *>(surface_)->presentImage(image);
+}
 #endif
 void PreviewCanvas::setPlaying(bool playing, const QString &message) {
 #ifndef _WIN32
-    if (!playing) { videoSink()->setVideoFrame({}); presentImage({}); }
+    if (!playing) {
+        videoSink()->setVideoFrame({});
+        presentImage({});
+    }
 #endif
     placeholder_->setVisible(!playing);
-    placeholder_->setText(message.isEmpty() ? "Preview is off\n\nConnect your camera, then start the preview." : message);
+    placeholder_->setText(message.isEmpty()
+                              ? "Preview is off\n\nConnect your camera, then start the preview."
+                              : message);
 }
+
 void PreviewCanvas::resizeEvent(QResizeEvent *event) {
     QWidget::resizeEvent(event);
-    QSize fit(16, 9); fit.scale(size(), Qt::KeepAspectRatio);
-    surface_->setGeometry((width() - fit.width()) / 2, (height() - fit.height()) / 2, fit.width(), fit.height());
+    QSize fit(16, 9);
+    fit.scale(size(), Qt::KeepAspectRatio);
+    surface_->setGeometry((width() - fit.width()) / 2, (height() - fit.height()) / 2, fit.width(),
+                          fit.height());
     placeholder_->setGeometry(surface_->rect());
-    if (resized) resized(fit.width(), fit.height());
+    if (resized)
+        resized(fit.width(), fit.height());
 }
+
 Window::Window(std::filesystem::path data, bool discover) {
     setWindowTitle("Tiny PTZ");
     setObjectName("tinyPtzWindow");
-    resize(1180, 790); setMinimumSize(900, 620);
+    resize(1180, 790);
+    setMinimumSize(900, 620);
     auto central = new QWidget(this);
-    auto layout = new QVBoxLayout(central); layout->setContentsMargins(20, 18, 20, 18); layout->setSpacing(16);
+    auto layout = new QVBoxLayout(central);
+    layout->setContentsMargins(20, 18, 20, 18);
+    layout->setSpacing(16);
     auto header = new QHBoxLayout;
-    auto titles = new QVBoxLayout; titles->setSpacing(2);
-    auto title = new QLabel("Tiny PTZ", central); title->setObjectName("appTitle"); titles->addWidget(title);
-    auto subtitle = new QLabel("OBSBOT camera controller", central); subtitle->setProperty("muted", true); titles->addWidget(subtitle);
-    header->addLayout(titles); header->addStretch();
-    connection_ = new QLabel("Not connected", central); connection_->setObjectName("connectionBadge"); header->addWidget(connection_);
-    auto themeLabel = new QLabel("Theme", central); themeLabel->setProperty("muted", true); header->addWidget(themeLabel);
-    theme_ = new QComboBox(central); theme_->setObjectName("appTheme");
-    theme_->addItem("System", "system"); theme_->addItem("Light", "light"); theme_->addItem("Dark", "dark"); header->addWidget(theme_);
+    auto titles = new QVBoxLayout;
+    titles->setSpacing(2);
+    auto title = new QLabel("Tiny PTZ", central);
+    title->setObjectName("appTitle");
+    titles->addWidget(title);
+    auto subtitle = new QLabel("OBSBOT camera controller", central);
+    subtitle->setProperty("muted", true);
+    titles->addWidget(subtitle);
+    header->addLayout(titles);
+    header->addStretch();
+    connection_ = new QLabel("Not connected", central);
+    connection_->setObjectName("connectionBadge");
+    header->addWidget(connection_);
+    auto themeLabel = new QLabel("Theme", central);
+    themeLabel->setProperty("muted", true);
+    header->addWidget(themeLabel);
+    theme_ = new QComboBox(central);
+    theme_->setObjectName("appTheme");
+    theme_->addItem("System", "system");
+    theme_->addItem("Light", "light");
+    theme_->addItem("Dark", "dark");
+    header->addWidget(theme_);
     layout->addLayout(header);
-    auto splitter = new QSplitter(Qt::Horizontal, central); splitter->setChildrenCollapsible(false); splitter->setHandleWidth(14);
-    auto previewCard = new QFrame(splitter); previewCard->setProperty("card", true);
-    auto previewLayout = new QVBoxLayout(previewCard); previewLayout->setContentsMargins(16, 14, 16, 14);
+    auto splitter = new QSplitter(Qt::Horizontal, central);
+    splitter->setChildrenCollapsible(false);
+    splitter->setHandleWidth(14);
+    auto previewCard = new QFrame(splitter);
+    previewCard->setProperty("card", true);
+    auto previewLayout = new QVBoxLayout(previewCard);
+    previewLayout->setContentsMargins(16, 14, 16, 14);
     auto previewHeader = new QHBoxLayout;
-    auto label = new QLabel("Camera preview", previewCard); QFont font = label->font(); font.setPointSize(12); font.setBold(true); label->setFont(font);
-    previewHeader->addWidget(label); previewHeader->addStretch();
-    previewButton_ = new QPushButton("Start preview", previewCard); previewButton_->setObjectName("previewToggle"); previewButton_->setEnabled(false);
-    previewHeader->addWidget(previewButton_); previewLayout->addLayout(previewHeader);
-    preview_ = new PreviewCanvas(previewCard); previewLayout->addWidget(preview_, 1);
+    auto label = new QLabel("Camera preview", previewCard);
+    QFont font = label->font();
+    font.setPointSize(12);
+    font.setBold(true);
+    label->setFont(font);
+    previewHeader->addWidget(label);
+    previewHeader->addStretch();
+    previewButton_ = new QPushButton("Start preview", previewCard);
+    previewButton_->setObjectName("previewToggle");
+    previewButton_->setEnabled(false);
+    previewHeader->addWidget(previewButton_);
+    previewLayout->addLayout(previewHeader);
+    preview_ = new PreviewCanvas(previewCard);
+    previewLayout->addWidget(preview_, 1);
 #ifndef _WIN32
     capture_ = new LinuxPreviewCapture(this);
-    previewWatchdog_.setSingleShot(true); previewWatchdog_.setInterval(7000);
+    previewWatchdog_.setSingleShot(true);
+    previewWatchdog_.setInterval(7000);
     QObject::connect(&previewWatchdog_, &QTimer::timeout, this, [this] {
-        stopLinuxPreview(playing_ ? "Preview stopped receiving frames. Close other camera apps and try again."
-                                  : "The camera opened but supplied no video frames. Close other camera apps and try again.");
+        stopLinuxPreview(
+            playing_ ? "Preview stopped receiving frames. Close other camera apps and try again."
+                     : "The camera opened but supplied no video frames. Close other camera apps "
+                       "and try again.");
     });
 #endif
-    auto caption = new QLabel("Preview is optional. Stop it when OBS is using the camera.", previewCard);
-    caption->setProperty("muted", true); caption->setWordWrap(true); previewLayout->addWidget(caption);
-    auto panel = new QFrame(splitter); panel->setProperty("card", true); panel->setMinimumWidth(410);
-    auto panelLayout = new QVBoxLayout(panel); panelLayout->setContentsMargins(8, 8, 8, 8);
-    tinyobs::Host host{[] { return std::vector<tinyobs::Scene>{}; }, [] { return tinyobs::Scene{}; }, [] { return std::string{}; }};
+    auto caption =
+        new QLabel("Preview is optional. Stop it when OBS is using the camera.", previewCard);
+    caption->setProperty("muted", true);
+    caption->setWordWrap(true);
+    previewLayout->addWidget(caption);
+    auto panel = new QFrame(splitter);
+    panel->setProperty("card", true);
+    panel->setMinimumWidth(410);
+    auto panelLayout = new QVBoxLayout(panel);
+    panelLayout->setContentsMargins(8, 8, 8, 8);
+    tinyobs::Host host{[] { return std::vector<tinyobs::Scene>{}; },
+                       [] { return tinyobs::Scene{}; }, [] { return std::string{}; }};
     controls_ = new tinyobs::Dock(data / L"app.json", data / L"presets.ptz", host, discover, true);
     panelLayout->addWidget(controls_);
-    splitter->addWidget(previewCard); splitter->addWidget(panel); splitter->setStretchFactor(0, 3); splitter->setStretchFactor(1, 2);
-    splitter->setSizes({660, 460}); layout->addWidget(splitter, 1); setCentralWidget(central);
+    splitter->addWidget(previewCard);
+    splitter->addWidget(panel);
+    splitter->setStretchFactor(0, 3);
+    splitter->setStretchFactor(1, 2);
+    splitter->setSizes({660, 460});
+    layout->addWidget(splitter, 1);
+    setCentralWidget(central);
     theme_->setCurrentIndex(std::max(0, theme_->findData(controls_->themePreference())));
 #ifndef _WIN32
     preview_->frameReady = [this] {
-        if (!previewRequested_ || !capture_->running()) return;
+        if (!previewRequested_ || !capture_->running())
+            return;
         previewWatchdog_.start();
-        if (playing_) return;
-        playing_ = true; preview_->setPlaying(true);
-        previewButton_->setText("Stop preview"); previewButton_->setEnabled(true);
+        if (playing_)
+            return;
+        playing_ = true;
+        preview_->setPlaying(true);
+        previewButton_->setText("Stop preview");
+        previewButton_->setEnabled(true);
         controls_->setPreviewStatus("Preview is live.");
         qInfo() << "TinyPTZ preview: first decoded camera frame displayed";
     };
     preview_->frameError = [this](const QString &message) {
-        if (previewRequested_) stopLinuxPreview(message);
+        if (previewRequested_)
+            stopLinuxPreview(message);
     };
     capture_->frame = [this](const QImage &image) { preview_->presentImage(image); };
-    capture_->failed = [this](const QString &message) { stopLinuxPreview("Preview failed: " + message); };
+    capture_->failed = [this](const QString &message) {
+        stopLinuxPreview("Preview failed: " + message);
+    };
 #endif
     controls_->connectionChanged = [this](bool connected, const QString &text) {
-        connection_->setText(connected ? "Connected" : "Not connected"); connection_->setToolTip(text);
+        connection_->setText(connected ? "Connected" : "Not connected");
+        connection_->setToolTip(text);
         previewButton_->setEnabled(connected);
 #ifndef _WIN32
-        if (!connected) stopLinuxPreview();
+        if (!connected)
+            stopLinuxPreview();
 #endif
     };
     controls_->previewChanged = [this](bool playing, const QString &error) {
 #ifndef _WIN32
-        if (playing) startLinuxPreview();
-        else stopLinuxPreview(error);
+        if (playing)
+            startLinuxPreview();
+        else
+            stopLinuxPreview(error);
 #else
-        playing_ = playing; preview_->setPlaying(playing, error);
+        playing_ = playing;
+        preview_->setPlaying(playing, error);
         previewButton_->setText(playing ? "Stop preview" : "Start preview");
         previewButton_->setEnabled(connection_->text() == "Connected");
 #endif
     };
-    preview_->resized = [this](int width, int height) { if (!closing_) controls_->resizePreview(width, height); };
+    preview_->resized = [this](int width, int height) {
+        if (!closing_)
+            controls_->resizePreview(width, height);
+    };
     QObject::connect(previewButton_, &QPushButton::clicked, this, [this] {
 #ifndef _WIN32
-        if (previewRequested_) { stopLinuxPreview(); return; }
+        if (previewRequested_) {
+            stopLinuxPreview();
+            return;
+        }
 #endif
         previewButton_->setEnabled(false);
         auto size = preview_->videoSize();
         controls_->setPreviewEnabled(!playing_, preview_->owner(), size.width(), size.height());
     });
     QObject::connect(theme_, &QComboBox::currentIndexChanged, this, [this] {
-        controls_->setThemePreference(theme_->currentData().toString()); updateTheme();
+        controls_->setThemePreference(theme_->currentData().toString());
+        updateTheme();
     });
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this, [this] { if (theme_->currentData() == "system") updateTheme(); });
+    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
+        if (theme_->currentData() == "system")
+            updateTheme();
+    });
 #endif
     updateTheme();
 }
+
 void Window::updateTheme() {
-    auto theme = theme_->currentData().toString(); applyTheme(theme);
+    auto theme = theme_->currentData().toString();
+    applyTheme(theme);
 #ifdef _WIN32
     BOOL dark = theme == "dark" || (theme == "system" && systemDark());
     DwmSetWindowAttribute(reinterpret_cast<HWND>(winId()), 20, &dark, sizeof(dark));
@@ -281,23 +400,31 @@ void Window::updateTheme() {
 }
 #ifndef _WIN32
 void Window::stopLinuxPreview(const QString &message) {
-    previewWatchdog_.stop(); previewRequested_ = false;
+    previewWatchdog_.stop();
+    previewRequested_ = false;
     capture_->stop();
-    playing_ = false; preview_->setPlaying(false, message);
+    playing_ = false;
+    preview_->setPlaying(false, message);
     previewButton_->setText("Start preview");
     previewButton_->setEnabled(!closing_ && connection_->text() == "Connected");
-    if (controls_) controls_->setPreviewStatus(message.isEmpty() ? "Preview stopped." : message, !message.isEmpty());
-    if (!message.isEmpty()) qWarning() << "TinyPTZ preview:" << message;
+    if (controls_)
+        controls_->setPreviewStatus(message.isEmpty() ? "Preview stopped." : message,
+                                    !message.isEmpty());
+    if (!message.isEmpty())
+        qWarning() << "TinyPTZ preview:" << message;
 }
+
 void Window::startLinuxPreview() {
     stopLinuxPreview();
     previewRequested_ = true;
     preview_->setPlaying(false, "Starting preview… Waiting for the first video frame.");
-    previewButton_->setText("Stop preview"); previewButton_->setEnabled(true);
+    previewButton_->setText("Stop preview");
+    previewButton_->setEnabled(true);
     controls_->setPreviewStatus("Starting preview… Waiting for video frames.");
     previewWatchdog_.start();
     auto error = capture_->startDevice(QString::fromStdWString(controls_->selectedDevice()));
-    if (!error.isEmpty()) stopLinuxPreview("Preview failed: " + error);
+    if (!error.isEmpty())
+        stopLinuxPreview("Preview failed: " + error);
 }
 #endif
 Window::~Window() {
@@ -306,12 +433,17 @@ Window::~Window() {
 #endif
     controls_->shutdown();
 }
+
 void Window::closeEvent(QCloseEvent *event) {
-    if (closing_) { event->ignore(); return; }
+    if (closing_) {
+        event->ignore();
+        return;
+    }
     closing_ = true;
 #ifndef _WIN32
     stopLinuxPreview();
 #endif
-    controls_->shutdown(); event->accept();
+    controls_->shutdown();
+    event->accept();
 }
 } // namespace tinyapp

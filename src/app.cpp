@@ -6,10 +6,13 @@
 #include <commdlg.h>
 #include <functional>
 #include <shellapi.h>
+
 namespace ptz {
 void showSettings(HWND, Camera &);
 }
+
 using namespace ptz;
+
 namespace {
 enum {
     Devices = 100,
@@ -47,6 +50,7 @@ enum {
     TiltSlider,
     ZoomSlider
 };
+
 HINSTANCE instance;
 HWND mainWindow, deviceBox, status, previewHost, list, searchBox, nameBox, panBox, tiltBox, zoomBox;
 NumericSlider panControl, tiltControl, zoomControl;
@@ -60,6 +64,7 @@ std::vector<Device> found;
 std::vector<size_t> visible;
 bool previewOn = false, storeHealthy = true;
 std::wstring selectedId;
+
 HWND ctl(const wchar_t *cls, const wchar_t *text, int id, int x, int y, int w, int h,
          DWORD extra = 0) {
     auto c = CreateWindowExW(
@@ -69,12 +74,15 @@ HWND ctl(const wchar_t *cls, const wchar_t *text, int id, int x, int y, int w, i
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     return c;
 }
+
 void label(const wchar_t *text, int x, int y, int w = 230) {
     ctl(L"STATIC", text, 0, x, y, w, 23);
 }
+
 void button(const wchar_t *text, int id, int x, int y, int w = 100, int h = 32) {
     ctl(L"BUTTON", text, id, x, y, w, h, BS_PUSHBUTTON | WS_TABSTOP);
 }
+
 std::wstring text(HWND w) {
     int n = GetWindowTextLengthW(w);
     std::wstring s(n + 1, 0);
@@ -82,14 +90,17 @@ std::wstring text(HWND w) {
     s.resize(n);
     return s;
 }
+
 void message(const std::wstring &s) {
     SetWindowTextW(status, s.c_str());
 }
+
 void error(const std::exception &e) {
     auto s = wide(e.what());
     message(s);
     MessageBoxW(mainWindow, s.c_str(), L"Tiny PTZ", MB_OK | MB_ICONWARNING);
 }
+
 void processLivePosition(bool force = false) {
     try {
         livePosition.tick(
@@ -110,6 +121,7 @@ void processLivePosition(bool force = false) {
     if (!livePosition.active())
         KillTimer(mainWindow, positionTimer);
 }
+
 void showPosition() {
     auto p = camera.read();
     auto configure = [&](NumericSlider &slider, long axis, long value) {
@@ -123,6 +135,7 @@ void showPosition() {
     SetWindowTextW(tiltBox, std::to_wstring(p.tilt).c_str());
     SetWindowTextW(zoomBox, std::to_wstring(p.zoom).c_str());
 }
+
 long number(HWND w) {
     auto s = text(w);
     size_t end = 0;
@@ -131,10 +144,12 @@ long number(HWND w) {
         throw std::runtime_error("Enter whole numbers for pan, tilt and zoom.");
     return n;
 }
+
 int selection() {
     int i = ListView_GetNextItem(list, -1, LVNI_SELECTED);
     return i >= 0 && i < (int)visible.size() ? (int)visible[i] : -1;
 }
+
 void fillList() {
     ListView_DeleteAllItems(list);
     visible.clear();
@@ -160,6 +175,7 @@ void fillList() {
         ListView_SetItemText(list, row, 1, values.data());
     }
 }
+
 void refresh() {
     camera.disconnect();
     previewOn = false;
@@ -178,6 +194,7 @@ void refresh() {
     fillList();
     message(L"Choose your camera and connect. Preview is optional when using OBS.");
 }
+
 void connect() {
     int i = (int)SendMessage(deviceBox, CB_GETCURSEL, 0, 0);
     if (i < 0 || i >= (int)found.size())
@@ -195,6 +212,7 @@ void connect() {
             L"   Tilt " + std::to_wstring(t.min) + L".." + std::to_wstring(t.max) + L"   Zoom " +
             std::to_wstring(z.min) + L".." + std::to_wstring(z.max));
 }
+
 void persist(const std::function<void()> &edit) {
     if (!storeHealthy)
         throw std::runtime_error("Preset file could not be loaded. Repair or back up "
@@ -209,6 +227,7 @@ void persist(const std::function<void()> &edit) {
     }
     fillList();
 }
+
 std::wstring presetName() {
     auto name = text(nameBox);
     auto first = name.find_first_not_of(L" \t");
@@ -217,11 +236,13 @@ std::wstring presetName() {
     name = name.substr(first, name.find_last_not_of(L" \t") - first + 1);
     return name;
 }
+
 void uniqueName(const std::wstring &n, int except = -1) {
     for (size_t i = 0; i < store.items.size(); ++i)
         if ((int)i != except && store.items[i].device == selectedId && store.items[i].name == n)
             throw std::runtime_error("A preset already has that name.");
 }
+
 void fileTransfer(bool importing) {
     wchar_t path[32768] = L"presets.ptz";
     OPENFILENAMEW f{sizeof(f)};
@@ -261,6 +282,7 @@ void fileTransfer(bool importing) {
         message(L"Exported all camera presets.");
     }
 }
+
 void command(int id) {
     processLivePosition(true);
     if (id == SettingsButton) {
@@ -402,6 +424,7 @@ void command(int id) {
             persist([&] { store.items.erase(store.items.begin() + index); });
     }
 }
+
 LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
     try {
         switch (msg) {
@@ -599,6 +622,7 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(w, msg, wp, lp);
 }
 } // namespace
+
 int WINAPI wWinMain(HINSTANCE h, HINSTANCE, PWSTR, int show) {
     instance = h;
     SetProcessDPIAware();

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <map>
+
 namespace ptz {
 // Throttle while dragging, retaining only the newest value for each control.
 // Readback runs after input is idle, never while a slider owns mouse capture.
@@ -10,11 +11,13 @@ template <class Key, class Value> class LiveSliderEdits {
         bool final;
         std::uint64_t interaction;
     };
+
     struct Sent {
         Value value;
         std::uint64_t at, interaction;
         bool verify;
     };
+
     std::map<Key, Pending> pending_;
     std::map<Key, Sent> sent_;
 
@@ -28,6 +31,7 @@ template <class Key, class Value> class LiveSliderEdits {
         }
         pending_[key] = {value, final, now};
     }
+
     template <class Apply>
     void tick(std::uint64_t now, bool captured, Apply apply, bool force = false) {
         for (auto i = pending_.begin(); i != pending_.end();) {
@@ -49,6 +53,7 @@ template <class Key, class Value> class LiveSliderEdits {
                     entry.second.verify = false;
                 }
     }
+
     bool active() const {
         if (!pending_.empty())
             return true;
@@ -57,6 +62,7 @@ template <class Key, class Value> class LiveSliderEdits {
                 return true;
         return false;
     }
+
     void clear() {
         pending_.clear();
         sent_.clear();

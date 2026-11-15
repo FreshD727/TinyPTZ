@@ -7,6 +7,7 @@
 #include <functional>
 #include <iomanip>
 #include <sstream>
+
 namespace ptz {
 namespace {
 struct Editor {
@@ -21,11 +22,13 @@ struct Editor {
     std::vector<Setting> settings;
     std::vector<size_t> rows;
 };
+
 std::wstring format(double n) {
     std::wostringstream s;
     s << std::setprecision(8) << n;
     return s.str();
 }
+
 HWND control(Editor &e, const wchar_t *type, const wchar_t *label, int id, int x, int y, int w,
              int h, DWORD style = 0) {
     HWND c = CreateWindowExW(type == std::wstring(L"EDIT") ? WS_EX_CLIENTEDGE : 0, type, label,
@@ -34,10 +37,12 @@ HWND control(Editor &e, const wchar_t *type, const wchar_t *label, int id, int x
     SendMessageW(c, WM_SETFONT, (WPARAM)e.font, TRUE);
     return c;
 }
+
 Setting *selected(Editor &e) {
     int row = ListView_GetNextItem(e.list, -1, LVNI_SELECTED);
     return row >= 0 && row < (int)e.rows.size() ? &e.settings[e.rows[row]] : nullptr;
 }
+
 void fill(Editor &e) {
     e.refreshing = true;
     ListView_DeleteAllItems(e.list);
@@ -73,6 +78,7 @@ void fill(Editor &e) {
     EnableWindow(e.defaults, group == 1);
     e.refreshing = false;
 }
+
 void updateManualControls(Editor &e) {
     auto *s = selected(e);
     bool enabled =
@@ -82,7 +88,9 @@ void updateManualControls(Editor &e) {
     EnableWindow(e.numeric.track,
                  enabled && e.numeric.valid && e.numeric.ticks > 0 && s->choices.empty());
 }
+
 void showSelection(Editor &e);
+
 void refreshSettings(Editor &e, std::vector<Setting> settings) {
     auto *old = selected(e);
     std::string key = old ? old->current.key : "";
@@ -97,7 +105,9 @@ void refreshSettings(Editor &e, std::vector<Setting> settings) {
             break;
         }
 }
+
 constexpr UINT_PTR liveTimer = 7001;
+
 void processLive(Editor &e, std::uint64_t now, bool force = false) {
     e.live.tick(
         now, GetCapture() == e.numeric.track,
@@ -130,6 +140,7 @@ void processLive(Editor &e, std::uint64_t now, bool force = false) {
     if (!e.live.active())
         KillTimer(e.window, liveTimer);
 }
+
 void flushLive(Editor &e) {
     try {
         processLive(e, GetTickCount64(), true);
@@ -139,11 +150,13 @@ void flushLive(Editor &e) {
         throw;
     }
 }
+
 void load(Editor &e) {
     flushLive(e);
     e.live.clear();
     refreshSettings(e, e.camera->settings());
 }
+
 void showSelection(Editor &e) {
     auto *s = selected(e);
     if (!s) {
@@ -181,6 +194,7 @@ void showSelection(Editor &e) {
                        .c_str());
     SetWindowTextW(e.details, (s->name + L"\n" + s->details).c_str());
 }
+
 LRESULT CALLBACK procedure(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
     auto *e = (Editor *)GetWindowLongPtrW(w, GWLP_USERDATA);
     try {
@@ -361,6 +375,7 @@ LRESULT CALLBACK procedure(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(w, msg, wp, lp);
 }
 } // namespace
+
 void showSettings(HWND owner, Camera &camera) {
     if (!camera.connected())
         throw std::runtime_error("Connect a camera first");

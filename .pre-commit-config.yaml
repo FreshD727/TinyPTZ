@@ -1,0 +1,30 @@
+minimum_pre_commit_version: '4.5.1'
+default_stages: [pre-commit]
+exclude: '^(build|dist|research|tools|data)/'
+
+repos:
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v23.1.5
+    hooks:
+      - id: clang-format
+        files: '^(src|obs|tests)/.*\.(cpp|hpp|h)$'
+        types_or: [c, c++]
+
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 26.10.1
+    hooks:
+      - id: black
+        args: [--line-length=100, --target-version=py310]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-json
+        files: '(\.json$|^flake\.lock$)'
+        types: [file]

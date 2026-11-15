@@ -31,9 +31,8 @@ void Camera::setAxis(long property, long value) {
 void Camera::move(Position position) {
     auto pan = range(CameraControl_Pan), tilt = range(CameraControl_Tilt),
          zoom = range(CameraControl_Zoom);
-    if (!pan.supported || !tilt.supported || !zoom.supported ||
-        position.pan < pan.min || position.pan > pan.max ||
-        position.tilt < tilt.min || position.tilt > tilt.max ||
+    if (!pan.supported || !tilt.supported || !zoom.supported || position.pan < pan.min ||
+        position.pan > pan.max || position.tilt < tilt.min || position.tilt > tilt.max ||
         position.zoom < zoom.min || position.zoom > zoom.max)
         throw std::runtime_error("Preset outside camera limits.");
     wake(true);

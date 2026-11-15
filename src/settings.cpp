@@ -12,6 +12,7 @@
 namespace ptz {
 namespace {
 enum class Backend { Camera, Image, Raw, Ai, Scalar, Block, ReadOnly, Applied };
+
 struct Definition {
     const char *key;
     const wchar_t *name;
@@ -24,8 +25,10 @@ struct Definition {
     double min = 0, max = 1, step = 1;
     std::vector<std::pair<double, std::wstring>> choices;
 };
+
 using Options = std::vector<std::pair<double, std::wstring>>;
 Options onOff{{0, L"Off"}, {1, L"On"}};
+
 const std::vector<Definition> &definitions() {
     static auto defs = [] {
         std::vector<Definition> d;
@@ -204,6 +207,7 @@ const std::vector<Definition> &definitions() {
     }();
     return defs;
 }
+
 const Definition &find(const std::string &key) {
     auto &d = definitions();
     auto i = std::find_if(d.begin(), d.end(), [&](auto &x) { return key == x.key; });
@@ -211,9 +215,11 @@ const Definition &find(const std::string &key) {
         throw std::runtime_error("Unknown setting: " + key);
     return *i;
 }
+
 unsigned short word(const unsigned char *p) {
     return p[0] | (p[1] << 8);
 }
+
 unsigned short crc(const unsigned char *p, size_t n) {
     unsigned short c = 0xffff;
     for (size_t i = 0; i < n; ++i) {
@@ -223,10 +229,12 @@ unsigned short crc(const unsigned char *p, size_t n) {
     }
     return c ^ 0xffff;
 }
+
 void put(std::vector<unsigned char> &b, size_t offset, unsigned short value) {
     b[offset] = value & 255;
     b[offset + 1] = value >> 8;
 }
+
 std::vector<unsigned char> floatData(double value) {
     float f = (float)value;
     std::vector<unsigned char> b(4);
@@ -323,6 +331,7 @@ std::vector<unsigned char> Camera::request(unsigned short command, bool write,
         return {};
     throw std::runtime_error("Setting command timed out; read settings before retrying");
 }
+
 std::vector<Setting> Camera::settings(const std::string &onlyKey) {
     const Definition *requested = onlyKey.empty() ? nullptr : &find(onlyKey);
     std::vector<Setting> result;
@@ -355,7 +364,10 @@ std::vector<Setting> Camera::settings(const std::string &onlyKey) {
             if (d.backend == Backend::Camera || d.backend == Backend::Image) {
                 long lo = 0, hi = 0, step = 0, normal = 0, support = 0, value = 0, flags = 0;
                 auto driverRange = standardRange(d.backend == Backend::Image, d.property, support);
-                lo = driverRange.min; hi = driverRange.max; step = driverRange.step; normal = driverRange.normal;
+                lo = driverRange.min;
+                hi = driverRange.max;
+                step = driverRange.step;
+                normal = driverRange.normal;
                 value = standardRead(d.backend == Backend::Image, d.property, flags);
                 s.defaultValue = {d.key, (double)normal, (support & 1) != 0};
                 s.defaultAvailable = true;
@@ -455,6 +467,7 @@ std::vector<Setting> Camera::settings(const std::string &onlyKey) {
     }
     return result;
 }
+
 std::string Camera::positionDiagnostics() {
     wake(true);
     auto b = request(0x6604, false);
@@ -469,6 +482,7 @@ std::string Camera::positionDiagnostics() {
     out << "display " << p.pan << " " << p.tilt << " " << p.zoom << "\n";
     return out.str();
 }
+
 void Camera::restoreImageDefaults() {
     wake(true);
     auto all = settings();
@@ -497,6 +511,7 @@ void Camera::restoreImageDefaults() {
     if (exposure && exposure->writable && exposure->defaultAvailable)
         applySetting(exposure->defaultValue);
 }
+
 std::vector<unsigned char> Camera::bootRecord() {
     wake(true);
     std::vector<unsigned char> b;
@@ -514,6 +529,7 @@ std::vector<unsigned char> Camera::bootRecord() {
         throw std::runtime_error("Unsupported camera boot-position layout");
     return b;
 }
+
 void Camera::writeBootRecord(const std::vector<unsigned char> &b) {
     if (b.size() != 24)
         throw std::runtime_error("Invalid boot position");
@@ -528,6 +544,7 @@ void Camera::writeBootRecord(const std::vector<unsigned char> &b) {
             throw std::runtime_error("Camera did not confirm stored boot position");
     }
 }
+
 void Camera::setBootPreset(const Preset &p) {
     if (p.device != id_)
         throw std::runtime_error("Preset belongs to a different camera");
@@ -562,10 +579,12 @@ void Camera::setBootPreset(const Preset &p) {
         throw;
     }
 }
+
 void Camera::activateBootPosition() {
     wake(true);
     request(0x3904, true);
 }
+
 std::string Camera::bootDiagnostics() {
     auto b = bootRecord();
     std::ostringstream out;
@@ -576,6 +595,7 @@ std::string Camera::bootDiagnostics() {
     }
     return out.str() + "\n";
 }
+
 std::vector<SettingValue> Camera::snapshotSettings() {
     std::vector<SettingValue> out;
     for (auto &s : settings())
@@ -583,6 +603,7 @@ std::vector<SettingValue> Camera::snapshotSettings() {
             out.push_back(s.current);
     return out;
 }
+
 void Camera::applySetting(const SettingValue &v, bool verify) {
     if (v.key == "backlight") {
         applySetting({"exposure_compensation", v.value - 9, v.automatic}, verify);
@@ -597,7 +618,10 @@ void Camera::applySetting(const SettingValue &v, bool verify) {
     if (d.backend == Backend::Camera || d.backend == Backend::Image) {
         long lo = 0, hi = 0, step = 0, normal = 0, flags = 0;
         auto driverRange = standardRange(d.backend == Backend::Image, d.property, flags);
-        lo = driverRange.min; hi = driverRange.max; step = driverRange.step; normal = driverRange.normal;
+        lo = driverRange.min;
+        hi = driverRange.max;
+        step = driverRange.step;
+        normal = driverRange.normal;
         if (!(flags & (v.automatic ? 1 : 2)))
             throw std::runtime_error("Requested manual/automatic mode is unsupported");
         double driverValue = v.value + (v.key == "exposure_compensation" ? 9 : 0);
@@ -684,6 +708,7 @@ void Camera::applySetting(const SettingValue &v, bool verify) {
         verifySetting(v);
     appliedSettings_[v.key] = v;
 }
+
 void Camera::verifySetting(const SettingValue &v) {
     auto &d = find(v.key);
     if (d.backend != Backend::Applied) {
@@ -706,6 +731,7 @@ void Camera::verifySetting(const SettingValue &v) {
                                           : ""));
     }
 }
+
 void Camera::recall(const Preset &p) {
     if (p.device != id_)
         throw std::runtime_error("Preset belongs to a different camera");
