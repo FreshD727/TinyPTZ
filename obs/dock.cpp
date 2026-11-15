@@ -426,7 +426,8 @@ Dock::Numeric Dock::addNumeric(QGridLayout *layout, int row, const QString &name
     n.slider->setObjectName(objectName + "Slider");
     n.slider->setMinimumWidth(60);
     n.number = new QDoubleSpinBox(parent);
-    if (standalone_) n.number->setButtonSymbols(QAbstractSpinBox::NoButtons);
+    // Keep the step arrows in the standalone UI too: Qt 6.12's stylesheet
+    // layout can shrink a NoButtons spin box's text editor to one pixel.
     n.number->setObjectName(objectName + "Number");
     n.number->setKeyboardTracking(false);
     n.number->setMinimumWidth(72);

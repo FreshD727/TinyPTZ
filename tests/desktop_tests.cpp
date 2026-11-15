@@ -13,6 +13,7 @@
 #include <QThread>
 #include <QElapsedTimer>
 #include <QDoubleSpinBox>
+#include <QFontMetrics>
 #include <QSlider>
 #include <QSignalBlocker>
 #include <QDir>
@@ -26,6 +27,33 @@
 #include <iostream>
 #include <fstream>
 static void require(bool value, const char *message) { if (!value) throw std::runtime_error(message); }
+static void numericLayoutTests(QApplication &app) {
+    QTemporaryDir temp;
+    tinyapp::Window window(ptz::filePath(temp.path().toStdWString()), false);
+    window.show();
+    auto tabs = window.findChild<QTabWidget *>("controlTabs");
+    std::array<ptz::Range, 3> ranges{{{-130, 130, 1, 0, true}, {-90, 90, 1, 0, true}, {0, 12, 1, 0, true}}};
+    window.controls()->presentPosition({130, -90, 12}, ranges);
+    for (const auto &theme : {"light", "dark"}) {
+        tinyapp::applyTheme(theme);
+        for (const auto &name : {"panNumber", "tiltNumber", "zoomNumber", "settingNumber"}) {
+            tabs->setCurrentIndex(QString(name) == "settingNumber" ? 1 : 0);
+            auto number = window.findChild<QDoubleSpinBox *>(name);
+            require(number, "numeric input exists");
+            if (QString(name) == "settingNumber") {
+                QSignalBlocker block(number);
+                number->setRange(-9, 9); number->setValue(-9); number->setEnabled(true);
+            }
+            app.processEvents();
+            auto editor = number->findChild<QLineEdit *>();
+            require(editor && !editor->text().isEmpty(), "numeric input contains text");
+            require(editor->contentsRect().width() >= editor->fontMetrics().horizontalAdvance(editor->text()),
+                    "styled numeric input leaves enough width to display its value in either theme");
+        }
+    }
+    window.close();
+    std::cout << "PASS: PTZ and settings numeric values fit their styled editors in light/dark themes\n";
+}
 static void uiTests(QApplication &app) {
     QDir().mkpath("build/desktop");
     QTemporaryDir temp; require(temp.isValid(), "temporary portable data directory");
@@ -246,6 +274,7 @@ int main(int argc, char **argv) {
 #endif
     app.setQuitOnLastWindowClosed(false);
     try {
+        numericLayoutTests(app);
         uiTests(app);
 #ifdef _WIN32
         if (argc > 1 && std::string(argv[1]) == "--hardware") hardwareTests();
