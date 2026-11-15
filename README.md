@@ -69,6 +69,18 @@ Platform guides: [Windows desktop](docs/DESKTOP-WINDOWS.md),
 [Linux desktop](docs/DESKTOP-LINUX.md), [Windows OBS](docs/OBS-PLUGIN.md),
 [Linux OBS](docs/OBS-LINUX.md).
 
+### Nix and NixOS
+
+Nix flake packages are available for the desktop app and OBS plugin, tested on
+NixOS x86-64. With flakes enabled:
+
+```bash
+nix run github:FreshD727/TinyPTZ#tinyptz
+nix build github:FreshD727/TinyPTZ#obs-tinyptz
+```
+
+Use matching OBS/Qt dependencies when integrating the plugin into Nix-managed OBS.
+
 ## First use
 
 1. Connect the Tiny SE, select it and click **Connect** / **Connect / read**.
