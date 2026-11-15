@@ -35,6 +35,9 @@ To format all tracked files manually, run `python -m pre_commit run --all-files`
 Formatter versions are pinned in `.pre-commit-config.yaml`. Generated builds,
 releases and local investigation directories are excluded.
 
+GitHub Actions runs the same checks on pushes and pull requests. Formatting
+violations fail the check and display the changes needed in the workflow log.
+
 Keep generated output and personal data out of commits. Application icons belong
 in `assets/`; runtime packaging code belongs in `packaging/` or `scripts/`.
 Public changes are made under the project's GPL version 2-or-later license.
