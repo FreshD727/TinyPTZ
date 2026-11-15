@@ -19,7 +19,7 @@ SOURCE_DIRS = ('assets', 'docs', 'obs', 'packaging', 'scripts', 'src', 'tests', 
 SOURCE_FILES = ('.clang-format', '.gitattributes', '.gitignore', 'CMakeLists.txt',
                 'README.md', 'LICENSE.txt', 'THIRD-PARTY-NOTICES.md', 'CONTRIBUTING.md',
                 'build.ps1', 'build-desktop.ps1', 'build-obs.ps1', 'build-linux.sh',
-                'build-linux-desktop.sh')
+                'build-linux-desktop.sh', 'flake.nix', 'flake.lock', 'package.nix')
 
 
 def version(kind):

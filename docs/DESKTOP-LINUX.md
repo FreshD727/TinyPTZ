@@ -1,4 +1,4 @@
-# Tiny PTZ for Linux - v1.0.2
+# Tiny PTZ for Linux - v1.0.3
 
 Standalone Qt controller for the OBSBOT Tiny SE with live PTZ controls, unlimited
 presets, tracking/image/device settings, camera auto-connect, dark/light/system
@@ -13,14 +13,14 @@ its launcher automatically as described below.
 
 ## Run the AppImage
 
-The x86_64 release is built on Ubuntu 24.04 with glibc 2.39 and Qt 6.4.2. Use
-Ubuntu 24.04 or a compatible newer Linux distribution. An AppImage bundles Qt
+The x86_64 release is built on Ubuntu 26.04 with glibc 2.43 and Qt 6.10.2. Use
+Ubuntu 26.04 or a compatible Linux distribution with glibc 2.43 or newer. An AppImage bundles Qt
 and its video dependencies; it still uses the host's kernel, graphics drivers
 and glibc. Older distributions need a build against their own libraries.
 
 ```bash
-chmod +x TinyPTZ-v1.0.2-Linux-x86_64.AppImage
-./TinyPTZ-v1.0.2-Linux-x86_64.AppImage
+chmod +x TinyPTZ-v1.0.3-Linux-x86_64.AppImage
+./TinyPTZ-v1.0.3-Linux-x86_64.AppImage
 ```
 
 The camera/PTZ icon is embedded in the application and AppImage. On first launch,
@@ -55,7 +55,7 @@ By default, data is written to `$XDG_DATA_HOME/TinyPTZ`, normally
 For a portable folder beside the AppImage, use an absolute path:
 
 ```bash
-./TinyPTZ-v1.0.2-Linux-x86_64.AppImage --data-dir "$PWD/TinyPTZ-data"
+./TinyPTZ-v1.0.3-Linux-x86_64.AppImage --data-dir "$PWD/TinyPTZ-data"
 ```
 
 The preset import/export buttons transfer `.ptz` libraries. Windows and Linux

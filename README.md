@@ -54,12 +54,13 @@ the AppImage, open it once from its new location to update the launcher.
 ### Compatibility
 
 - **Windows desktop:** Windows 10/11 x64. Qt and Visual C++ runtimes are bundled.
-- **Linux desktop:** the supplied AppImage is built on Ubuntu 24.04 with glibc
-  2.39 and Qt 6.4.2. It has also been reported working on Fedora 44. Older systems
-  may need a native build.
+- **Linux desktop:** the v1.0.3 AppImage is built on Ubuntu 26.04 with glibc
+  2.43 and Qt 6.10.2. It requires glibc 2.43 or newer. Older systems need a
+  native build or a compatible earlier release.
 - **Windows OBS plugin:** the supplied binary targets OBS 31.x with Qt 6.6.3.
-- **Linux OBS plugin:** built against native OBS 30.0.2 and Qt 6.4.2 on Ubuntu
-  24.04. Other OBS/Qt builds, including Flatpak, may require a matching rebuild.
+- **Linux OBS plugin:** built against native OBS 32.1.0 and Qt 6.10.2 on Ubuntu
+  26.04 with glibc 2.43. Use OBS 32.1 or newer with compatible Qt libraries.
+  Other OBS/Qt builds, including Flatpak, may require a matching rebuild.
 
 OBS supplies the plugin's runtime libraries. Do not copy the standalone app's
 Qt libraries into OBS.

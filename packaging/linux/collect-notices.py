@@ -25,10 +25,12 @@ for package in sorted(packages):
         shutil.copyfile(notice, destination / (package + '.copyright'))
 licenses = pathlib.Path('/usr/share/common-licenses')
 shutil.copytree(licenses, destination / 'common-licenses', dirs_exist_ok=True)
+qt_version = subprocess.check_output(['qmake6', '-query', 'QT_VERSION'], text=True).strip()
+qt_series = '.'.join(qt_version.split('.')[:2])
 (destination / 'README.txt').write_text(
     'Debian package copyright notices for bundled libraries. Referenced common license texts\n'
     'are in common-licenses/. Libraries remain dynamically linked and replaceable in an\n'
     'extracted AppDir. System kernel, glibc and graphics drivers are not bundled.\n'
-    'Qt sources: https://download.qt.io/archive/qt/6.4/6.4.2/submodules/\n'
+    f'Qt sources: https://download.qt.io/archive/qt/{qt_series}/{qt_version}/submodules/\n'
     'Ubuntu dependency sources: https://archive.ubuntu.com/ubuntu/pool/\n', encoding='utf-8')
 print('Collected third-party notices for', len(packages), 'packages')

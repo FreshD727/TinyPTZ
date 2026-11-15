@@ -1,4 +1,4 @@
-# Tiny PTZ OBS plugin for Linux - v1.0.2
+# Tiny PTZ OBS plugin for Linux - v1.0.3
 
 Native Linux OBS dock for the OBSBOT Tiny SE: PTZ, tracking/image/device settings,
 unlimited presets, scene automation, full backups and scene-name restore matching.
@@ -6,9 +6,9 @@ OBS provides video capture; this plugin opens only camera controls.
 
 ## Install the Linux release
 
-The supplied x86_64 binary is built on **Ubuntu 24.04, glibc 2.39, OBS 30.0.2 and
-Qt 6.4.2**. Use a native Qt 6 OBS installation (OBS 30+). Other/older distributions
-may need a build against their own OBS/Qt libraries; do not copy Windows DLLs or
+The supplied x86_64 binary is built on **Ubuntu 26.04, glibc 2.43, OBS 32.1.0 and
+Qt 6.10.2**. Use native OBS 32.1 or newer with compatible Qt 6 libraries.
+Other/older distributions may need a build against their own OBS/Qt libraries; do not copy Windows DLLs or
 Qt runtime libraries into OBS. `ldd bin/64bit/tiny-ptz-obs.so` lists dependencies.
 
 Close OBS, extract the archive, and copy `tiny-ptz-obs` into:
